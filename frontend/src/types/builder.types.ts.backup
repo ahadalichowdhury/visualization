@@ -1,0 +1,597 @@
+import type { Edge, Node } from "reactflow";
+
+// Node configuration
+export interface NodeConfig {
+  // Common (all components)
+  region?: string; // e.g., 'us-east', 'eu-central'
+  replicas?: number; // Number of instances
+
+  // Compute (API, Web, Microservice, Worker)
+  instanceType?: string; // e.g., 't3.micro', 'm5.large', 'c5.xlarge'
+
+  // Database
+  storageType?: string; // e.g., 'gp3', 'io2', 'st1'
+  storage_size_gb?: number; // Storage size in GB
+  consistency?: "strong" | "eventual"; // Consistency model
+
+  // Cache (Redis, Memcached)
+  ttl_ms?: number; // Time to live in milliseconds
+
+  // Load Balancer
+  lbType?: string; // 'alb', 'nlb', 'classic'
+
+  // Queue / Message Broker
+  queueType?: string; // 'sqs-standard', 'sqs-fifo', 'kafka-small', etc.
+
+  // CDN
+  cdnType?: string; // 'cloudfront-basic', 'cloudfront-premium', 'akamai'
+
+  // Object Storage
+  objectStorageType?: string; // 's3-standard', 's3-ia', 's3-glacier'
+
+  // Search Engine
+  searchType?: string; // 'es-small', 'es-medium', 'es-large'
+
+  // NOTE: NO capacity_rps or latency_ms here!
+  // Performance is calculated ONLY during simulation based on:
+  // - Hardware specs (vCPU, memory, network, storage IOPS)
+  // - Workload pattern (RPS, burst/spike)
+  // - Application complexity
+  // This matches real-world: deploy code → load test → measure performance
+}
+
+// Node data
+export interface NodeData {
+  label: string;
+  config: NodeConfig;
+  nodeType?: string; // Store the node type for validation
+}
+
+// Custom node and edge types
+export type BuilderNode = Node<NodeData>;
+export type BuilderEdge = Edge;
+
+// Node type definition
+export interface NodeTypeDefinition {
+  type: string;
+  label: string;
+  icon: string;
+  defaultConfig: NodeConfig;
+  description: string;
+  category: "compute" | "storage" | "network" | "messaging" | "other";
+}
+
+// Canvas state
+export interface CanvasState {
+  nodes: BuilderNode[];
+  edges: BuilderEdge[];
+  metadata?: {
+    scenarioId?: string;
+    userId?: string;
+    createdAt?: string;
+    updatedAt?: string;
+  };
+}
+
+// Connection validation rule
+export interface ConnectionRule {
+  from: string[];
+  to: string[];
+}
+
+// History state for undo/redo
+export interface HistoryState {
+  nodes: BuilderNode[];
+  edges: BuilderEdge[];
+}
+
+// Available node types
+export const NODE_TYPES: NodeTypeDefinition[] = [
+  {
+    type: "client",
+    label: "Client",
+    icon: "👤",
+    description: "User/client application",
+    category: "compute",
+    defaultConfig: {
+      capacity_rps: 1000,
+      latency_ms: 0,
+    },
+  },
+  {
+    type: "mobile_app",
+    label: "Mobile App",
+    icon: "📱",
+    description: "Mobile application client",
+    category: "compute",
+    defaultConfig: {
+      capacity_rps: 500,
+      latency_ms: 0,
+    },
+  },
+  {
+    type: "web_browser",
+    label: "Web Browser",
+    icon: "🌐",
+    description: "Web browser client",
+    category: "compute",
+    defaultConfig: {
+      capacity_rps: 1000,
+      latency_ms: 0,
+    },
+  },
+  {
+    type: "load_balancer",
+    label: "Load Balancer",
+    icon: "⚖️",
+    description: "Distributes traffic across servers",
+    category: "network",
+    defaultConfig: {
+      capacity_rps: 100000,
+      latency_ms: 5,
+      replicas: 2,
+    },
+  },
+  {
+    type: "api_gateway",
+    label: "API Gateway",
+    icon: "🚪",
+    description: "API gateway for routing requests",
+    category: "network",
+    defaultConfig: {
+      capacity_rps: 50000,
+      latency_ms: 10,
+      replicas: 2,
+    },
+  },
+  {
+    type: "reverse_proxy",
+    label: "Reverse Proxy",
+    icon: "🔄",
+    description: "Nginx/HAProxy reverse proxy",
+    category: "network",
+    defaultConfig: {
+      capacity_rps: 80000,
+      latency_ms: 5,
+    },
+  },
+  {
+    type: "api_server",
+    label: "API Server",
+    icon: "🖥️",
+    description: "Application/API server",
+    category: "compute",
+    defaultConfig: {
+      capacity_rps: 10000,
+      latency_ms: 50,
+      replicas: 3,
+    },
+  },
+  {
+    type: "web_server",
+    label: "Web Server",
+    icon: "🌍",
+    description: "Static web server",
+    category: "compute",
+    defaultConfig: {
+      capacity_rps: 20000,
+      latency_ms: 10,
+      replicas: 2,
+    },
+  },
+  {
+    type: "microservice",
+    label: "Microservice",
+    icon: "⚙️",
+    description: "Independent microservice",
+    category: "compute",
+    defaultConfig: {
+      capacity_rps: 5000,
+      latency_ms: 30,
+      replicas: 2,
+    },
+  },
+  {
+    type: "worker",
+    label: "Background Worker",
+    icon: "👷",
+    description: "Background job processor",
+    category: "compute",
+    defaultConfig: {
+      capacity_rps: 1000,
+      latency_ms: 100,
+      replicas: 3,
+    },
+  },
+  {
+    type: "cache_redis",
+    label: "Redis Cache",
+    icon: "⚡",
+    description: "In-memory cache",
+    category: "storage",
+    defaultConfig: {
+      capacity_rps: 100000,
+      latency_ms: 1,
+      ttl_ms: 3600000,
+      storage_size_gb: 16,
+    },
+  },
+  {
+    type: "cache_memcached",
+    label: "Memcached",
+    icon: "💾",
+    description: "Distributed memory cache",
+    category: "storage",
+    defaultConfig: {
+      capacity_rps: 80000,
+      latency_ms: 2,
+      ttl_ms: 3600000,
+      storage_size_gb: 8,
+    },
+  },
+  {
+    type: "database_sql",
+    label: "SQL Database",
+    icon: "🗄️",
+    description: "Relational database (MySQL/PostgreSQL)",
+    category: "storage",
+    defaultConfig: {
+      capacity_rps: 5000,
+      latency_ms: 10,
+      storage_size_gb: 1000,
+      consistency: "strong",
+      replicas: 1,
+    },
+  },
+  {
+    type: "database_nosql",
+    label: "NoSQL Database",
+    icon: "🗃️",
+    description: "Document database (MongoDB)",
+    category: "storage",
+    defaultConfig: {
+      capacity_rps: 10000,
+      latency_ms: 15,
+      storage_size_gb: 500,
+      consistency: "eventual",
+      replicas: 3,
+    },
+  },
+  {
+    type: "database_graph",
+    label: "Graph Database",
+    icon: "🕸️",
+    description: "Graph database (Neo4j)",
+    category: "storage",
+    defaultConfig: {
+      capacity_rps: 3000,
+      latency_ms: 20,
+      storage_size_gb: 200,
+      replicas: 1,
+    },
+  },
+  {
+    type: "database_timeseries",
+    label: "Time Series DB",
+    icon: "📈",
+    description: "Time series database (InfluxDB)",
+    category: "storage",
+    defaultConfig: {
+      capacity_rps: 50000,
+      latency_ms: 5,
+      storage_size_gb: 1000,
+      replicas: 1,
+    },
+  },
+  {
+    type: "queue",
+    label: "Message Queue",
+    icon: "📮",
+    description: "Async message queue (RabbitMQ)",
+    category: "messaging",
+    defaultConfig: {
+      capacity_rps: 50000,
+      latency_ms: 5,
+    },
+  },
+  {
+    type: "message_broker",
+    label: "Message Broker",
+    icon: "📡",
+    description: "Pub/sub messaging (Kafka)",
+    category: "messaging",
+    defaultConfig: {
+      capacity_rps: 100000,
+      latency_ms: 10,
+      replicas: 3,
+    },
+  },
+  {
+    type: "event_bus",
+    label: "Event Bus",
+    icon: "🚌",
+    description: "Event streaming platform",
+    category: "messaging",
+    defaultConfig: {
+      capacity_rps: 80000,
+      latency_ms: 8,
+      replicas: 2,
+    },
+  },
+  {
+    type: "cdn",
+    label: "CDN",
+    icon: "🌐",
+    description: "Content delivery network",
+    category: "network",
+    defaultConfig: {
+      capacity_rps: 500000,
+      latency_ms: 20,
+    },
+  },
+  {
+    type: "object_storage",
+    label: "Object Storage",
+    icon: "📦",
+    description: "S3-like object storage",
+    category: "storage",
+    defaultConfig: {
+      capacity_rps: 10000,
+      latency_ms: 50,
+      storage_size_gb: 10000,
+    },
+  },
+  {
+    type: "file_storage",
+    label: "File Storage",
+    icon: "📁",
+    description: "Network file storage (NFS)",
+    category: "storage",
+    defaultConfig: {
+      capacity_rps: 5000,
+      latency_ms: 30,
+      storage_size_gb: 5000,
+    },
+  },
+  {
+    type: "search",
+    label: "Search Engine",
+    icon: "🔍",
+    description: "Full-text search (Elasticsearch)",
+    category: "storage",
+    defaultConfig: {
+      capacity_rps: 20000,
+      latency_ms: 30,
+      storage_size_gb: 500,
+      replicas: 2,
+    },
+  },
+  {
+    type: "analytics_service",
+    label: "Analytics",
+    icon: "📊",
+    description: "Analytics/metrics service",
+    category: "other",
+    defaultConfig: {
+      capacity_rps: 50000,
+      latency_ms: 100,
+    },
+  },
+  {
+    type: "monitoring",
+    label: "Monitoring",
+    icon: "📉",
+    description: "Monitoring system (Prometheus)",
+    category: "other",
+    defaultConfig: {
+      capacity_rps: 10000,
+      latency_ms: 50,
+    },
+  },
+  {
+    type: "logging",
+    label: "Logging Service",
+    icon: "📝",
+    description: "Centralized logging (ELK)",
+    category: "other",
+    defaultConfig: {
+      capacity_rps: 100000,
+      latency_ms: 20,
+    },
+  },
+  {
+    type: "notification",
+    label: "Notification Service",
+    icon: "🔔",
+    description: "Push notifications service",
+    category: "other",
+    defaultConfig: {
+      capacity_rps: 20000,
+      latency_ms: 100,
+    },
+  },
+  {
+    type: "email_service",
+    label: "Email Service",
+    icon: "✉️",
+    description: "Email sending service",
+    category: "other",
+    defaultConfig: {
+      capacity_rps: 5000,
+      latency_ms: 200,
+    },
+  },
+  {
+    type: "auth_service",
+    label: "Auth Service",
+    icon: "🔐",
+    description: "Authentication/Authorization",
+    category: "other",
+    defaultConfig: {
+      capacity_rps: 10000,
+      latency_ms: 50,
+      replicas: 2,
+    },
+  },
+  {
+    type: "payment_gateway",
+    label: "Payment Gateway",
+    icon: "💳",
+    description: "Payment processing service",
+    category: "other",
+    defaultConfig: {
+      capacity_rps: 2000,
+      latency_ms: 300,
+    },
+  },
+  {
+    type: "ml_model",
+    label: "ML Model",
+    icon: "🤖",
+    description: "Machine learning model service",
+    category: "compute",
+    defaultConfig: {
+      capacity_rps: 1000,
+      latency_ms: 500,
+      replicas: 2,
+    },
+  },
+  {
+    type: "container_orchestration",
+    label: "Kubernetes",
+    icon: "☸️",
+    description: "Container orchestration platform",
+    category: "other",
+    defaultConfig: {
+      capacity_rps: 50000,
+      latency_ms: 10,
+    },
+  },
+  {
+    type: "service_mesh",
+    label: "Service Mesh",
+    icon: "🕸️",
+    description: "Service mesh (Istio)",
+    category: "network",
+    defaultConfig: {
+      capacity_rps: 100000,
+      latency_ms: 5,
+    },
+  },
+];
+
+// Connection validation rules
+export const CONNECTION_RULES: Record<string, string[]> = {
+  client: [
+    "load_balancer",
+    "cdn",
+    "api_server",
+    "api_gateway",
+    "reverse_proxy",
+    "web_server",
+  ],
+  mobile_app: [
+    "load_balancer",
+    "cdn",
+    "api_server",
+    "api_gateway",
+    "reverse_proxy",
+  ],
+  web_browser: ["load_balancer", "cdn", "web_server", "api_gateway"],
+  load_balancer: [
+    "api_server",
+    "web_server",
+    "microservice",
+    "cache_redis",
+    "cache_memcached",
+  ],
+  api_gateway: ["api_server", "microservice", "auth_service", "cache_redis"],
+  reverse_proxy: ["api_server", "web_server", "microservice"],
+  api_server: [
+    "database_sql",
+    "database_nosql",
+    "cache_redis",
+    "cache_memcached",
+    "queue",
+    "search",
+    "object_storage",
+    "message_broker",
+    "event_bus",
+    "analytics_service",
+    "auth_service",
+    "notification",
+    "email_service",
+    "payment_gateway",
+    "ml_model",
+    "microservice",
+  ],
+  web_server: ["cdn", "object_storage", "file_storage", "cache_redis"],
+  microservice: [
+    "database_sql",
+    "database_nosql",
+    "database_graph",
+    "cache_redis",
+    "queue",
+    "message_broker",
+    "event_bus",
+    "microservice",
+    "auth_service",
+  ],
+  worker: [
+    "queue",
+    "database_sql",
+    "database_nosql",
+    "message_broker",
+    "notification",
+    "email_service",
+  ],
+  cache_redis: ["database_sql", "database_nosql"],
+  cache_memcached: ["database_sql", "database_nosql"],
+  database_sql: ["logging", "monitoring"],
+  database_nosql: ["logging", "monitoring"],
+  database_graph: ["logging"],
+  database_timeseries: ["analytics_service"],
+  queue: ["worker", "microservice", "analytics_service", "notification"],
+  message_broker: [
+    "worker",
+    "microservice",
+    "analytics_service",
+    "notification",
+  ],
+  event_bus: ["worker", "microservice", "analytics_service"],
+  cdn: ["object_storage", "web_server", "file_storage"],
+  object_storage: ["logging"],
+  file_storage: [],
+  search: ["database_sql", "database_nosql"],
+  analytics_service: [
+    "database_sql",
+    "database_nosql",
+    "database_timeseries",
+    "object_storage",
+  ],
+  monitoring: ["database_timeseries", "notification"],
+  logging: ["object_storage", "search"],
+  notification: ["email_service", "mobile_app"],
+  email_service: [],
+  auth_service: ["database_sql", "cache_redis"],
+  payment_gateway: ["database_sql", "queue"],
+  ml_model: ["object_storage", "cache_redis"],
+  container_orchestration: ["api_server", "microservice", "worker"],
+  service_mesh: ["microservice"],
+};
+
+// Get node type definition
+export const getNodeTypeDefinition = (
+  type: string
+): NodeTypeDefinition | undefined => {
+  return NODE_TYPES.find((nt) => nt.type === type);
+};
+
+// Validate connection
+export const isValidConnection = (
+  sourceType: string,
+  targetType: string
+): boolean => {
+  const allowedTargets = CONNECTION_RULES[sourceType];
+  return allowedTargets ? allowedTargets.includes(targetType) : false;
+};
