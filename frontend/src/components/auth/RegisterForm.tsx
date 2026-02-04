@@ -62,20 +62,20 @@ export const RegisterForm: React.FC = () => {
         password: formData.password,
         name: formData.name || undefined,
       });
-      navigate("/dashboard");
+      navigate("/scenarios");
     } catch (err) {
       // Error is handled by store
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-[#1a1a2e] dark:via-[#16213e] dark:to-[#0f1419] py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-[#1a1a2e] dark:via-[#16213e] dark:to-[#0f1419] py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-6 sm:space-y-8">
         <div>
-          <h2 className="mt-6 text-center text-4xl font-extrabold text-gray-900 dark:text-white">
+          <h2 className="mt-4 sm:mt-6 text-center text-3xl sm:text-4xl font-extrabold text-gray-900 dark:text-white">
             Create your account
           </h2>
-          <p className="mt-3 text-center text-sm text-gray-600 dark:text-gray-400">
+          <p className="mt-2 sm:mt-3 text-center text-xs sm:text-sm text-gray-600 dark:text-gray-400">
             Or{" "}
             <Link
               to="/login"
@@ -87,11 +87,11 @@ export const RegisterForm: React.FC = () => {
         </div>
 
         <form
-          className="mt-8 space-y-6 bg-white dark:bg-[#252526] p-8 rounded-xl shadow-2xl border border-gray-200 dark:border-[#3e3e3e]"
+          className="mt-6 sm:mt-8 space-y-4 sm:space-y-6 bg-white dark:bg-[#252526] p-6 sm:p-8 rounded-xl shadow-2xl border border-gray-200 dark:border-[#3e3e3e]"
           onSubmit={handleSubmit}
         >
           {error && (
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg">
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-3 sm:px-4 py-3 rounded-lg text-sm sm:text-base">
               {error}
             </div>
           )}
@@ -149,30 +149,31 @@ export const RegisterForm: React.FC = () => {
             type="submit"
             variant="primary"
             isLoading={isLoading}
-            className="w-full"
+            className="w-full text-base sm:text-lg py-3"
           >
             Create account
           </Button>
 
-          <div className="mt-6">
+          <div className="mt-4 sm:mt-6">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-gray-300 dark:border-[#3e3e3e]" />
               </div>
-              <div className="relative flex justify-center text-sm">
+              <div className="relative flex justify-center text-xs sm:text-sm">
                 <span className="px-2 bg-white dark:bg-[#252526] text-gray-500 dark:text-gray-400">
                   Or continue with
                 </span>
               </div>
             </div>
 
-            <div className="mt-6 grid grid-cols-2 gap-3">
+            <div className="mt-4 sm:mt-6 grid grid-cols-2 gap-3">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => {
                   window.location.href = "/api/auth/oauth/google";
                 }}
+                className="text-sm sm:text-base"
               >
                 Google
               </Button>
@@ -182,6 +183,7 @@ export const RegisterForm: React.FC = () => {
                 onClick={() => {
                   window.location.href = "/api/auth/oauth/github";
                 }}
+                className="text-sm sm:text-base"
               >
                 GitHub
               </Button>

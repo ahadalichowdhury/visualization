@@ -43,54 +43,53 @@ export const Profile: React.FC = () => {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#1e1e1e] py-8">
-      <div className="max-w-3xl mx-auto px-4">
-        <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#1e1e1e] py-6 sm:py-8">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6">
+        <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white mb-6 sm:mb-8">
           Profile Settings
         </h1>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
           {/* Profile Summary */}
-          <div className="md:col-span-1">
+          <div className="lg:col-span-1">
             <div className="card hover:shadow-lg transition-shadow">
               <div className="text-center">
                 {user.avatar_url ? (
                   <img
                     src={user.avatar_url}
                     alt={user.name || "User"}
-                    className="w-24 h-24 rounded-full mx-auto mb-4 border-4 border-blue-500 dark:border-blue-400"
+                    className="w-20 h-20 sm:w-24 sm:h-24 rounded-full mx-auto mb-4 border-4 border-blue-500 dark:border-blue-400"
                   />
                 ) : (
-                  <div className="w-24 h-24 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center text-white text-3xl font-bold mx-auto mb-4 shadow-lg">
+                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center text-white text-2xl sm:text-3xl font-bold mx-auto mb-4 shadow-lg">
                     {user.name
                       ? user.name[0].toUpperCase()
                       : user.email[0].toUpperCase()}
                   </div>
                 )}
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">
                   {user.name || "User"}
                 </h2>
-                <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">
+                <p className="text-gray-600 dark:text-gray-400 text-xs sm:text-sm mt-1 break-all px-2">
                   {user.email}
                 </p>
-                <span className="inline-block mt-3 px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 rounded-full text-sm font-medium">
-                  {user.role}
+                <span className="inline-block mt-3 px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 rounded-full text-xs sm:text-sm font-medium">
+                  {user.subscription_tier}
                 </span>
               </div>
 
               {user.progress_summary && (
                 <div className="mt-6 pt-6 border-t border-gray-200 dark:border-[#3e3e3e]">
-                  <h3 className="font-semibold mb-3 text-gray-900 dark:text-white">
+                  <h3 className="font-semibold mb-3 text-gray-900 dark:text-white text-sm sm:text-base">
                     Progress
                   </h3>
-                  <div className="space-y-3 text-sm">
+                  <div className="space-y-3 text-xs sm:text-sm">
                     <div className="flex justify-between p-2 bg-gray-50 dark:bg-[#2d2d2d] rounded">
                       <span className="text-gray-600 dark:text-gray-400">
                         Completed:
                       </span>
                       <span className="font-medium text-gray-900 dark:text-white">
-                        {user.progress_summary.completed_scenarios} /{" "}
-                        {user.progress_summary.total_scenarios}
+                        {user.progress_summary.completed_scenarios}
                       </span>
                     </div>
                     {user.progress_summary.streak_days !== undefined && (
@@ -100,16 +99,6 @@ export const Profile: React.FC = () => {
                         </span>
                         <span className="font-medium text-gray-900 dark:text-white">
                           {user.progress_summary.streak_days} days 🔥
-                        </span>
-                      </div>
-                    )}
-                    {user.progress_summary.best_score !== undefined && (
-                      <div className="flex justify-between p-2 bg-gray-50 dark:bg-[#2d2d2d] rounded">
-                        <span className="text-gray-600 dark:text-gray-400">
-                          Best Score:
-                        </span>
-                        <span className="font-medium text-gray-900 dark:text-white">
-                          {user.progress_summary.best_score}
                         </span>
                       </div>
                     )}
@@ -136,16 +125,16 @@ export const Profile: React.FC = () => {
           </div>
 
           {/* Edit Profile Form */}
-          <div className="md:col-span-2">
+          <div className="lg:col-span-2">
             <div className="card hover:shadow-lg transition-shadow">
-              <h2 className="text-2xl font-semibold mb-6 text-gray-900 dark:text-white">
+              <h2 className="text-xl sm:text-2xl font-semibold mb-4 sm:mb-6 text-gray-900 dark:text-white">
                 Edit Profile
               </h2>
 
               {success && (
-                <div className="mb-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 px-4 py-3 rounded-lg flex items-center gap-2">
+                <div className="mb-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 px-3 sm:px-4 py-3 rounded-lg flex items-center gap-2 text-sm sm:text-base">
                   <svg
-                    className="w-5 h-5"
+                    className="w-5 h-5 flex-shrink-0"
                     fill="currentColor"
                     viewBox="0 0 20 20"
                   >
@@ -160,9 +149,9 @@ export const Profile: React.FC = () => {
               )}
 
               {error && (
-                <div className="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg flex items-center gap-2">
+                <div className="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-3 sm:px-4 py-3 rounded-lg flex items-center gap-2 text-sm sm:text-base">
                   <svg
-                    className="w-5 h-5"
+                    className="w-5 h-5 flex-shrink-0"
                     fill="currentColor"
                     viewBox="0 0 20 20"
                   >
@@ -176,7 +165,7 @@ export const Profile: React.FC = () => {
                 </div>
               )}
 
-              <form onSubmit={handleSubmit} className="space-y-5">
+              <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
                 <Input
                   label="Name"
                   type="text"
@@ -194,18 +183,18 @@ export const Profile: React.FC = () => {
                 />
 
                 <div className="mb-4">
-                  <label className="label text-gray-900 dark:text-white">
+                  <label className="label text-gray-900 dark:text-white text-sm sm:text-base">
                     Email
                   </label>
                   <input
                     type="email"
                     value={user.email}
                     disabled
-                    className="input bg-gray-100 dark:bg-[#2d2d2d] cursor-not-allowed opacity-60 text-gray-900 dark:text-gray-400"
+                    className="input bg-gray-100 dark:bg-[#2d2d2d] cursor-not-allowed opacity-60 text-gray-900 dark:text-gray-400 text-sm sm:text-base"
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1">
                     <svg
-                      className="w-3 h-3"
+                      className="w-3 h-3 flex-shrink-0"
                       fill="currentColor"
                       viewBox="0 0 20 20"
                     >
@@ -223,7 +212,7 @@ export const Profile: React.FC = () => {
                   type="submit"
                   variant="primary"
                   isLoading={isLoading}
-                  className="w-full text-lg py-3"
+                  className="w-full text-base sm:text-lg py-3"
                 >
                   💾 Save Changes
                 </Button>

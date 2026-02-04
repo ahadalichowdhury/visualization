@@ -39,27 +39,9 @@ func AuthMiddleware(jwtService *auth.JWTService) fiber.Handler {
 		// Store user info in context
 		c.Locals("userID", claims.UserID)
 		c.Locals("userEmail", claims.Email)
-		c.Locals("userRole", claims.Role)
+		c.Locals("subscriptionTier", claims.SubscriptionTier)
 
 		return c.Next()
-	}
-}
-
-// RequireRole middleware checks if user has required role
-func RequireRole(allowedRoles ...string) fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		userRole := c.Locals("userRole").(string)
-
-		// Check if user role is in allowed roles
-		for _, role := range allowedRoles {
-			if userRole == role {
-				return c.Next()
-			}
-		}
-
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-			"error": "Insufficient permissions",
-		})
 	}
 }
 
@@ -79,8 +61,8 @@ func RequireSubscriptionTier(allowedTiers ...string) fiber.Handler {
 		}
 
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-			"error":   "This feature requires a premium subscription",
-			"premium": true,
+			"error":        "This feature requires a premium subscription",
+			"premium":      true,
 			"current_tier": userTier,
 		})
 	}

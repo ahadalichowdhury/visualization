@@ -4,7 +4,6 @@ export interface Scenario {
   description: string;
   category: string;
   difficulty: "Beginner" | "Intermediate" | "Advanced";
-  estimated_time: number;
   thumbnail_url?: string;
   requirements: Requirements;
   hints: string[];

@@ -1,0 +1,1 @@
+ALTER TABLE scenarios ADD COLUMN estimated_time INTEGER NOT NULL DEFAULT 30;

@@ -49,8 +49,8 @@ type LoginRequest struct {
 
 // AuthResponse represents an authentication response
 type AuthResponse struct {
-	Token   string               `json:"token"`
-	User    *models.UserProfile  `json:"user"`
+	Token string              `json:"token"`
+	User  *models.UserProfile `json:"user"`
 }
 
 // Signup creates a new user account
@@ -85,8 +85,7 @@ func (s *Service) Signup(req SignupRequest) (*AuthResponse, error) {
 		Email:            req.Email,
 		PasswordHash:     &hashedPassword,
 		Name:             req.Name,
-		Role:             "basic",
-		SubscriptionTier: "free", // Default to free tier
+		SubscriptionTier: models.TierFree, // Default to free tier
 	}
 
 	if err := s.repo.CreateUser(user); err != nil {
@@ -94,7 +93,7 @@ func (s *Service) Signup(req SignupRequest) (*AuthResponse, error) {
 	}
 
 	// Generate JWT token
-	token, err := s.jwtService.GenerateToken(user.ID, user.Email, user.Role)
+	token, err := s.jwtService.GenerateToken(user.ID, user.Email, user.SubscriptionTier)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate token: %w", err)
 	}
@@ -137,7 +136,7 @@ func (s *Service) Login(req LoginRequest) (*AuthResponse, error) {
 	_ = s.repo.UpdateLastLogin(user.ID)
 
 	// Generate JWT token
-	token, err := s.jwtService.GenerateToken(user.ID, user.Email, user.Role)
+	token, err := s.jwtService.GenerateToken(user.ID, user.Email, user.SubscriptionTier)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate token: %w", err)
 	}
@@ -176,8 +175,7 @@ func (s *Service) OAuthSignup(provider, providerUID, email string, name, avatarU
 		Email:            email,
 		Name:             name,
 		AvatarURL:        avatarURL,
-		Role:             "basic",
-		SubscriptionTier: "free", // Default to free tier
+		SubscriptionTier: models.TierFree, // Default to free tier
 		Provider:         &provider,
 		ProviderUID:      &providerUID,
 	}
@@ -187,7 +185,7 @@ func (s *Service) OAuthSignup(provider, providerUID, email string, name, avatarU
 	}
 
 	// Generate JWT token
-	token, err := s.jwtService.GenerateToken(user.ID, user.Email, user.Role)
+	token, err := s.jwtService.GenerateToken(user.ID, user.Email, user.SubscriptionTier)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate token: %w", err)
 	}
@@ -278,7 +276,7 @@ func (s *Service) GetUserProfile(userID string) (*models.UserProfile, error) {
 	}
 
 	if progress != nil {
-		profile.ProgressSummary = progress.ToSummary(user.Role)
+		profile.ProgressSummary = progress.ToSummary(user.SubscriptionTier)
 	}
 
 	return profile, nil
@@ -319,7 +317,7 @@ func (s *Service) UpdateSubscriptionTier(userID string, newTier string) (*models
 
 	// Prevent non-admins from setting admin tier
 	// In production, you'd also check if the user has valid payment
-	if newTier == models.TierAdmin && user.Role != "admin" {
+	if newTier == models.TierAdmin && user.SubscriptionTier != models.TierAdmin {
 		return nil, errors.New("unauthorized to set admin tier")
 	}
 
@@ -335,7 +333,7 @@ func (s *Service) UpdateSubscriptionTier(userID string, newTier string) (*models
 func (s *Service) loginExistingUser(user *models.User) (*AuthResponse, error) {
 	_ = s.repo.UpdateLastLogin(user.ID)
 
-	token, err := s.jwtService.GenerateToken(user.ID, user.Email, user.Role)
+	token, err := s.jwtService.GenerateToken(user.ID, user.Email, user.SubscriptionTier)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate token: %w", err)
 	}

@@ -427,7 +427,7 @@ func (h *StripeHandler) handleInvoicePaymentFailed(invoice *stripe.Invoice) {
 	}
 
 	if err := h.repo.CreatePaymentHistory(payment); err != nil {
-		log.Printf("Error creating payment history: %w", err)
+		log.Printf("Error creating payment history: %v", err)
 	}
 
 	log.Printf("Payment failed for user %s: $%.2f", userID, amount)

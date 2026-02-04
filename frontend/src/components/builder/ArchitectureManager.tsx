@@ -294,11 +294,6 @@ export const ArchitectureManager: React.FC<ArchitectureManagerProps> = ({
                           ✓ Submitted
                         </span>
                       )}
-                      {arch.score !== undefined && arch.score !== null && (
-                        <span className="text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 px-2 py-1 rounded-full font-medium">
-                          Score: {arch.score}
-                        </span>
-                      )}
                     </div>
 
                     {/* Date */}

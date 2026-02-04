@@ -35,8 +35,8 @@ func (r *Repository) DB() *sql.DB {
 // CreateUser creates a new user
 func (r *Repository) CreateUser(user *models.User) error {
 	query := `
-		INSERT INTO users (email, password_hash, name, avatar_url, role, subscription_tier, provider, provider_uid)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO users (email, password_hash, name, avatar_url, subscription_tier, provider, provider_uid)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id, created_at, updated_at
 	`
 	err := r.db.QueryRow(
@@ -45,7 +45,6 @@ func (r *Repository) CreateUser(user *models.User) error {
 		user.PasswordHash,
 		user.Name,
 		user.AvatarURL,
-		user.Role,
 		user.SubscriptionTier,
 		user.Provider,
 		user.ProviderUID,
@@ -60,8 +59,8 @@ func (r *Repository) CreateUser(user *models.User) error {
 
 	// Create initial progress record
 	_, err = r.db.Exec(
-		"INSERT INTO progress (user_id, total_scenarios_available) VALUES ($1, $2)",
-		user.ID, 10, // Default total scenarios
+		"INSERT INTO progress (user_id) VALUES ($1)",
+		user.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create progress: %w", err)
@@ -74,7 +73,7 @@ func (r *Repository) CreateUser(user *models.User) error {
 func (r *Repository) GetUserByEmail(email string) (*models.User, error) {
 	user := &models.User{}
 	query := `
-		SELECT id, email, password_hash, name, avatar_url, role, subscription_tier, provider, provider_uid, last_login_at, created_at, updated_at
+		SELECT id, email, password_hash, name, avatar_url, subscription_tier, provider, provider_uid, last_login_at, created_at, updated_at
 		FROM users
 		WHERE email = $1
 	`
@@ -84,7 +83,6 @@ func (r *Repository) GetUserByEmail(email string) (*models.User, error) {
 		&user.PasswordHash,
 		&user.Name,
 		&user.AvatarURL,
-		&user.Role,
 		&user.SubscriptionTier,
 		&user.Provider,
 		&user.ProviderUID,
@@ -107,7 +105,7 @@ func (r *Repository) GetUserByEmail(email string) (*models.User, error) {
 func (r *Repository) GetUserByID(id string) (*models.User, error) {
 	user := &models.User{}
 	query := `
-		SELECT id, email, password_hash, name, avatar_url, role, subscription_tier, provider, provider_uid, last_login_at, created_at, updated_at
+		SELECT id, email, password_hash, name, avatar_url, subscription_tier, provider, provider_uid, last_login_at, created_at, updated_at
 		FROM users
 		WHERE id = $1
 	`
@@ -117,7 +115,6 @@ func (r *Repository) GetUserByID(id string) (*models.User, error) {
 		&user.PasswordHash,
 		&user.Name,
 		&user.AvatarURL,
-		&user.Role,
 		&user.SubscriptionTier,
 		&user.Provider,
 		&user.ProviderUID,
@@ -140,7 +137,7 @@ func (r *Repository) GetUserByID(id string) (*models.User, error) {
 func (r *Repository) GetUserByProviderUID(provider, providerUID string) (*models.User, error) {
 	user := &models.User{}
 	query := `
-		SELECT id, email, password_hash, name, avatar_url, role, subscription_tier, provider, provider_uid, last_login_at, created_at, updated_at
+		SELECT id, email, password_hash, name, avatar_url, subscription_tier, provider, provider_uid, last_login_at, created_at, updated_at
 		FROM users
 		WHERE provider = $1 AND provider_uid = $2
 	`
@@ -150,7 +147,6 @@ func (r *Repository) GetUserByProviderUID(provider, providerUID string) (*models
 		&user.PasswordHash,
 		&user.Name,
 		&user.AvatarURL,
-		&user.Role,
 		&user.SubscriptionTier,
 		&user.Provider,
 		&user.ProviderUID,
@@ -203,16 +199,6 @@ func (r *Repository) UpdateLastLogin(userID string) error {
 	query := `UPDATE users SET last_login_at = $1 WHERE id = $2`
 	_, err := r.db.Exec(query, time.Now(), userID)
 	return err
-}
-
-// UpdateUserRole updates user role (admin only)
-func (r *Repository) UpdateUserRole(userID, role string) error {
-	query := `UPDATE users SET role = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`
-	_, err := r.db.Exec(query, role, userID)
-	if err != nil {
-		return fmt.Errorf("failed to update role: %w", err)
-	}
-	return nil
 }
 
 // UpdateUserSubscriptionTier updates user subscription tier
@@ -276,13 +262,57 @@ func (r *Repository) MarkPasswordResetUsed(resetID string) error {
 	return err
 }
 
+// UpdateUserStreak updates the user's streak based on activity
+func (r *Repository) UpdateUserStreak(userID string) error {
+	// Get current progress
+	progress, err := r.GetProgressByUserID(userID)
+	if err != nil {
+		return fmt.Errorf("failed to get user progress for streak update: %w", err)
+	}
+	if progress == nil {
+		return nil // Should not happen, but safe to ignore
+	}
+
+	now := time.Now()
+	lastUpdate := progress.UpdatedAt
+
+	// Calculate days difference
+	// Truncate to start of day for accurate day comparison
+	currentDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	lastUpdateDay := time.Date(lastUpdate.Year(), lastUpdate.Month(), lastUpdate.Day(), 0, 0, 0, 0, lastUpdate.Location())
+
+	daysDiff := int(currentDay.Sub(lastUpdateDay).Hours() / 24)
+
+	var newStreak int
+	switch daysDiff {
+	case 0:
+		// Activity on the same day, streak unchanged
+		return nil
+	case 1:
+		// Activity on the next day, increment streak
+		newStreak = progress.StreakDays + 1
+	default:
+		// Activity after more than 1 day, reset streak
+		newStreak = 1
+	}
+
+	// Update streak in database
+	query := `UPDATE progress SET streak_days = $1, updated_at = CURRENT_TIMESTAMP WHERE user_id = $2`
+	_, err = r.db.Exec(query, newStreak, userID)
+	if err != nil {
+		return fmt.Errorf("failed to update user streak: %w", err)
+	}
+
+	return nil
+}
+
 // Progress operations
 
 // GetProgressByUserID retrieves user progress
 func (r *Repository) GetProgressByUserID(userID string) (*models.Progress, error) {
 	progress := &models.Progress{}
 	query := `
-		SELECT id, user_id, completed_scenarios_count, total_scenarios_available, streak_days, best_score, created_at, updated_at
+		SELECT id, user_id, completed_scenarios_count, streak_days, best_score, created_at, updated_at
 		FROM progress
 		WHERE user_id = $1
 	`
@@ -290,7 +320,6 @@ func (r *Repository) GetProgressByUserID(userID string) (*models.Progress, error
 		&progress.ID,
 		&progress.UserID,
 		&progress.CompletedScenariosCount,
-		&progress.TotalScenariosAvailable,
 		&progress.StreakDays,
 		&progress.BestScore,
 		&progress.CreatedAt,
@@ -310,7 +339,7 @@ func (r *Repository) GetProgressByUserID(userID string) (*models.Progress, error
 // GetAllUsers retrieves all users (admin only)
 func (r *Repository) GetAllUsers() ([]*models.User, error) {
 	query := `
-		SELECT id, email, password_hash, name, avatar_url, role, subscription_tier, provider, provider_uid, last_login_at, created_at, updated_at
+		SELECT id, email, password_hash, name, avatar_url, subscription_tier, provider, provider_uid, last_login_at, created_at, updated_at
 		FROM users
 		ORDER BY created_at DESC
 	`
@@ -329,7 +358,6 @@ func (r *Repository) GetAllUsers() ([]*models.User, error) {
 			&user.PasswordHash,
 			&user.Name,
 			&user.AvatarURL,
-			&user.Role,
 			&user.SubscriptionTier,
 			&user.Provider,
 			&user.ProviderUID,

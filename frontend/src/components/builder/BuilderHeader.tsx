@@ -1,5 +1,7 @@
+import { Clock, Users, Wifi, WifiOff } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import type { CollaborationUser } from "../../services/collaboration.service";
 import { ThemeToggle } from "../common/ThemeToggle";
 
 interface BuilderHeaderProps {
@@ -16,6 +18,13 @@ interface BuilderHeaderProps {
   lastSavedAt?: Date | null;
   hasUnsavedChanges?: boolean;
   autoSaveEnabled?: boolean;
+  isCollaborationEnabled?: boolean;
+  isCollaborationConnected?: boolean;
+  onToggleCollaboration?: () => void;
+  onShowShareDialog?: () => void;
+  users?: CollaborationUser[];
+  currentUserId?: string;
+  isHost?: boolean;
 }
 
 export const BuilderHeader = ({
@@ -32,8 +41,45 @@ export const BuilderHeader = ({
   lastSavedAt = null,
   hasUnsavedChanges = false,
   autoSaveEnabled = false,
+  isCollaborationEnabled = false,
+  isCollaborationConnected = false,
+  onToggleCollaboration,
+  onShowShareDialog,
+  users = [],
+  currentUserId,
+  isHost = false,
 }: BuilderHeaderProps) => {
   const [showSettings, setShowSettings] = useState(false);
+
+  // Helper functions for user list
+  const getUserColor = (userId: string): string => {
+    const colors = [
+      "bg-blue-500", "bg-green-500", "bg-yellow-500", "bg-red-500",
+      "bg-purple-500", "bg-pink-500", "bg-indigo-500", "bg-teal-500",
+    ];
+    const index = userId.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return colors[index % colors.length];
+  };
+
+  const getInitials = (name: string): string => {
+    return name
+      .split(" ")
+      .map(n => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  const formatLastSeen = (timestamp: number): string => {
+    const seconds = Math.floor((Date.now() / 1000) - timestamp);
+    if (seconds < 60) return "just now";
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    return `${Math.floor(seconds / 3600)}h ago`;
+  };
+
+  // Get current user and others
+  const currentUser = currentUserId ? users.find(u => u.id === currentUserId) : null;
+  const otherUsers = currentUserId ? users.filter(u => u.id !== currentUserId) : users;
 
   // Format last saved time
   const getLastSavedText = () => {
@@ -55,7 +101,7 @@ export const BuilderHeader = ({
       {/* Left: Project Name */}
       <div className="flex items-center space-x-3">
         <Link
-          to="/dashboard"
+          to="/scenarios"
           className="p-2 text-gray-500 hover:text-gray-900 dark:text-[#cccccc] hover:bg-gray-100 dark:hover:bg-[#2d2d2d] rounded-lg transition-colors"
           title="Back to Dashboard"
         >
@@ -140,6 +186,8 @@ export const BuilderHeader = ({
         )}
 
         <ThemeToggle />
+
+
 
         {/* My Architectures Button */}
         <button
@@ -319,6 +367,130 @@ export const BuilderHeader = ({
                   </svg>
                   <span>Show Requirements</span>
                 </button>
+
+                <div className="border-t border-gray-200 dark:border-[#3e3e3e] my-1" />
+
+                {/* Collaboration Section */}
+                {isCollaborationEnabled ? (
+                  <div className="px-4 py-2 bg-gray-50 dark:bg-[#1e1e1e] border-y border-gray-200 dark:border-[#3e3e3e]">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center space-x-2">
+                        <Users className="w-4 h-4 text-gray-600 dark:text-[#d4d4d4]" />
+                        <span className="text-sm font-semibold text-gray-900 dark:text-[#d4d4d4]">
+                          Collaboration
+                        </span>
+                      </div>
+                      {isCollaborationConnected ? (
+                        <div className="flex items-center space-x-1">
+                          <Wifi className="w-3 h-3 text-green-500" />
+                          <span className="text-xs text-green-600 dark:text-green-400">Connected</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center space-x-1">
+                          <WifiOff className="w-3 h-3 text-red-500" />
+                          <span className="text-xs text-red-600 dark:text-red-400">Disconnected</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* User List */}
+                    <div className="space-y-2 max-h-48 overflow-y-auto mb-3 custom-scrollbar">
+                      {/* Current User */}
+                      {currentUser && (
+                        <div className="flex items-center space-x-2 p-1.5 bg-white dark:bg-[#252526] rounded border border-blue-100 dark:border-blue-900/30">
+                          <div className={`w-6 h-6 rounded-full ${getUserColor(currentUser.id)} flex items-center justify-center text-white text-xs font-semibold`}>
+                            {getInitials(currentUser.name)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-gray-900 dark:text-[#d4d4d4] truncate">
+                              {currentUser.name} (You)
+                            </div>
+                            {isHost && (
+                              <div className="text-[10px] text-blue-600 dark:text-blue-400 uppercase tracking-wider font-bold">
+                                Host
+                              </div>
+                            )}
+                          </div>
+                          <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+                        </div>
+                      )}
+
+                      {/* Other Users */}
+                      {otherUsers.map((user) => (
+                        <div key={user.id} className="flex items-center space-x-2 p-1.5">
+                          <div className={`w-6 h-6 rounded-full ${getUserColor(user.id)} flex items-center justify-center text-white text-xs font-semibold`}>
+                            {getInitials(user.name)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-gray-900 dark:text-[#d4d4d4] truncate">
+                              {user.name}
+                            </div>
+                            <div className="flex items-center space-x-1 text-[10px] text-gray-500 dark:text-[#9ca3af]">
+                              <Clock className="w-3 h-3" />
+                              <span>{formatLastSeen(user.lastSeen)}</span>
+                            </div>
+                          </div>
+                          <div className={`w-1.5 h-1.5 rounded-full ${user.isIdle ? 'bg-yellow-500' : 'bg-green-500'}`}></div>
+                        </div>
+                      ))}
+                      
+                      {otherUsers.length === 0 && !currentUser && (
+                         <div className="text-center py-2 text-xs text-gray-500">No active users</div>
+                      )}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="space-y-1">
+                      {onShowShareDialog && (
+                        <button
+                          onClick={() => {
+                            onShowShareDialog();
+                            setShowSettings(false);
+                          }}
+                          className="w-full px-3 py-1.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors flex items-center justify-center space-x-1"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                          </svg>
+                          <span>Share Link</span>
+                        </button>
+                      )}
+                      
+                      {onToggleCollaboration && (
+                        <button
+                          onClick={() => {
+                           onToggleCollaboration();
+                           setShowSettings(false);
+                          }}
+                          className="w-full px-3 py-1.5 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 rounded transition-colors text-center"
+                        >
+                          {isHost ? "Disable Collaboration" : "Leave Session"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  /* Enable Button */
+                  onToggleCollaboration && (
+                    <button
+                      onClick={() => {
+                        onToggleCollaboration();
+                        setShowSettings(false);
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-[#d4d4d4] hover:bg-gray-100 dark:hover:bg-[#2d2d2d] flex items-center space-x-2"
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                      <span>Enable Collaboration</span>
+                    </button>
+                  )
+                )}
 
                 <div className="border-t border-gray-200 dark:border-[#3e3e3e] my-1" />
 

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import toast from "react-hot-toast";
 import { Link } from "react-router-dom";
 import { scenarioService } from "../services/scenario.service";
 import { useAuthStore } from "../store/authStore";
@@ -21,7 +22,7 @@ export const Scenarios = () => {
   const [searchTerm, setSearchTerm] = useState<string>("");
 
   // Check if user is free tier (not premium)
-  const isFreeUser = !user || user.role === "basic";
+  const isFreeUser = !user || user.subscription_tier === "free";
 
   // Ref for infinite scroll observer
   const observerTarget = useRef<HTMLDivElement>(null);
@@ -292,7 +293,7 @@ export const Scenarios = () => {
                     onClick={(e) => {
                       if (isLocked) {
                         e.preventDefault();
-                        alert(
+                        toast(
                           "This is a premium scenario. Upgrade to access it!",
                         );
                       }
@@ -383,36 +384,8 @@ export const Scenarios = () => {
                             {scenario.category}
                           </span>
                         </div>
-                        <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                          <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                            />
-                          </svg>
-                          {scenario.estimated_time} min
-                        </span>
-                      </div>
 
-                      {isAuthenticated && scenario.score !== undefined && (
-                        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-[#3e3e3e]">
-                          <div className="flex justify-between items-center text-sm">
-                            <span className="text-gray-600 dark:text-gray-400">
-                              Score:
-                            </span>
-                            <span className="font-semibold text-blue-600 dark:text-blue-400">
-                              {scenario.score}/100
-                            </span>
-                          </div>
-                        </div>
-                      )}
+                      </div>
                     </div>
                   </Link>
                 );

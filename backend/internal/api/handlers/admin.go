@@ -31,14 +31,14 @@ func (h *AdminHandler) GetAllUsers(c *fiber.Ctx) error {
 	profiles := make([]fiber.Map, len(users))
 	for i, user := range users {
 		profiles[i] = fiber.Map{
-			"id":            user.ID,
-			"email":         user.Email,
-			"name":          user.Name,
-			"avatar_url":    user.AvatarURL,
-			"role":          user.Role,
-			"provider":      user.Provider,
-			"last_login_at": user.LastLoginAt,
-			"created_at":    user.CreatedAt,
+			"id":                user.ID,
+			"email":             user.Email,
+			"name":              user.Name,
+			"avatar_url":        user.AvatarURL,
+			"subscription_tier": user.SubscriptionTier,
+			"provider":          user.Provider,
+			"last_login_at":     user.LastLoginAt,
+			"created_at":        user.CreatedAt,
 		}
 	}
 
@@ -48,13 +48,13 @@ func (h *AdminHandler) GetAllUsers(c *fiber.Ctx) error {
 	})
 }
 
-// UpdateUserRole updates a user's role (admin only)
-// PUT /admin/users/:id/role
-func (h *AdminHandler) UpdateUserRole(c *fiber.Ctx) error {
+// UpdateUserSubscriptionTier updates a user's subscription tier (admin only)
+// PUT /admin/users/:id/subscription
+func (h *AdminHandler) UpdateUserSubscriptionTier(c *fiber.Ctx) error {
 	userID := c.Params("id")
-	
+
 	var req struct {
-		Role string `json:"role"`
+		SubscriptionTier string `json:"subscription_tier"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -62,21 +62,21 @@ func (h *AdminHandler) UpdateUserRole(c *fiber.Ctx) error {
 		})
 	}
 
-	// Validate role
-	if req.Role != "basic" && req.Role != "pro" && req.Role != "admin" {
+	// Validate tier
+	if req.SubscriptionTier != "free" && req.SubscriptionTier != "premium" && req.SubscriptionTier != "admin" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid role. Must be basic, pro, or admin",
+			"error": "Invalid subscription tier. Must be free, premium, or admin",
 		})
 	}
 
-	// Update role
-	if err := h.repo.UpdateUserRole(userID, req.Role); err != nil {
+	// Update tier
+	if err := h.repo.UpdateUserSubscriptionTier(userID, req.SubscriptionTier); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to update role",
+			"error": "Failed to update subscription tier",
 		})
 	}
 
 	return c.JSON(fiber.Map{
-		"message": "Role updated successfully",
+		"message": "Subscription tier updated successfully",
 	})
 }

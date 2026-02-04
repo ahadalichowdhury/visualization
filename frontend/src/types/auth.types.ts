@@ -3,7 +3,6 @@ export interface User {
   email: string;
   name?: string;
   avatar_url?: string;
-  role: 'basic' | 'pro' | 'admin';
   subscription_tier: 'free' | 'premium' | 'admin';
   created_at: string;
   progress_summary?: ProgressSummary;
@@ -11,10 +10,8 @@ export interface User {
 
 export interface ProgressSummary {
   completed_scenarios: number;
-  total_scenarios: number;
   pro_features_unlocked: boolean;
   streak_days?: number;
-  best_score?: number;
 }
 
 export interface FeatureLimits {

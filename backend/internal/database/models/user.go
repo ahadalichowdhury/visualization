@@ -11,7 +11,6 @@ type User struct {
 	PasswordHash     *string    `json:"-" db:"password_hash"`
 	Name             *string    `json:"name" db:"name"`
 	AvatarURL        *string    `json:"avatar_url" db:"avatar_url"`
-	Role             string     `json:"role" db:"role"`
 	SubscriptionTier string     `json:"subscription_tier" db:"subscription_tier"` // 'free', 'premium', 'admin'
 	Provider         *string    `json:"provider,omitempty" db:"provider"`
 	ProviderUID      *string    `json:"provider_uid,omitempty" db:"provider_uid"`
@@ -26,7 +25,6 @@ type UserProfile struct {
 	Email            string           `json:"email"`
 	Name             *string          `json:"name"`
 	AvatarURL        *string          `json:"avatar_url"`
-	Role             string           `json:"role"`
 	SubscriptionTier string           `json:"subscription_tier"` // 'free', 'premium', 'admin'
 	CreatedAt        time.Time        `json:"created_at"`
 	ProgressSummary  *ProgressSummary `json:"progress_summary,omitempty"`
@@ -39,7 +37,6 @@ func (u *User) ToProfile() *UserProfile {
 		Email:            u.Email,
 		Name:             u.Name,
 		AvatarURL:        u.AvatarURL,
-		Role:             u.Role,
 		SubscriptionTier: u.SubscriptionTier,
 		CreatedAt:        u.CreatedAt,
 	}
@@ -60,7 +57,6 @@ type Progress struct {
 	ID                      string    `json:"id" db:"id"`
 	UserID                  string    `json:"user_id" db:"user_id"`
 	CompletedScenariosCount int       `json:"completed_scenarios_count" db:"completed_scenarios_count"`
-	TotalScenariosAvailable int       `json:"total_scenarios_available" db:"total_scenarios_available"`
 	StreakDays              int       `json:"streak_days" db:"streak_days"`
 	BestScore               int       `json:"best_score" db:"best_score"`
 	CreatedAt               time.Time `json:"created_at" db:"created_at"`
@@ -70,18 +66,16 @@ type Progress struct {
 // ProgressSummary represents a simplified progress view
 type ProgressSummary struct {
 	CompletedScenarios  int  `json:"completed_scenarios"`
-	TotalScenarios      int  `json:"total_scenarios"`
 	ProFeaturesUnlocked bool `json:"pro_features_unlocked"`
 	StreakDays          int  `json:"streak_days"`
 	BestScore           int  `json:"best_score"`
 }
 
 // ToSummary converts Progress to ProgressSummary
-func (p *Progress) ToSummary(userRole string) *ProgressSummary {
+func (p *Progress) ToSummary(subscriptionTier string) *ProgressSummary {
 	return &ProgressSummary{
 		CompletedScenarios:  p.CompletedScenariosCount,
-		TotalScenarios:      p.TotalScenariosAvailable,
-		ProFeaturesUnlocked: userRole == "pro" || userRole == "admin",
+		ProFeaturesUnlocked: subscriptionTier == TierPremium || subscriptionTier == TierAdmin,
 		StreakDays:          p.StreakDays,
 		BestScore:           p.BestScore,
 	}
@@ -136,4 +130,3 @@ func (u *User) MaxArchitecturesPerScenario() int {
 	// Unlimited for premium and admin
 	return -1
 }
-

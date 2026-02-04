@@ -34,11 +34,16 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   // Check role requirements
   if (requiredRole && user) {
-    const roleHierarchy = { basic: 0, pro: 1, admin: 2 };
-    const userRoleLevel = roleHierarchy[user.role];
-    const requiredRoleLevel = roleHierarchy[requiredRole];
+    const tierHierarchy = { free: 0, premium: 1, admin: 2 };
+    // Map old role names to new tiers if necessary, or just rely on direct check
+    // Assuming requiredRole prop might still pass 'basic'/'pro'/'admin', let's map them
+    const roleMapping: Record<string, string> = { basic: 'free', pro: 'premium', admin: 'admin' };
+    const requiredTier = roleMapping[requiredRole] || requiredRole;
+    
+    const userTierLevel = tierHierarchy[user.subscription_tier] || 0;
+    const requiredTierLevel = tierHierarchy[requiredTier as keyof typeof tierHierarchy] || 0;
 
-    if (userRoleLevel < requiredRoleLevel) {
+    if (userTierLevel < requiredTierLevel) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50">
           <div className="text-center">

@@ -8,20 +8,20 @@ import (
 
 // Scenario represents a system design scenario
 type Scenario struct {
-	ID            string       `json:"id" db:"id"`
-	Title         string       `json:"title" db:"title"`
-	Description   string       `json:"description" db:"description"`
-	Category      string       `json:"category" db:"category"`
-	Difficulty    string       `json:"difficulty" db:"difficulty"`
-	EstimatedTime int          `json:"estimated_time" db:"estimated_time"`
-	ThumbnailURL  *string      `json:"thumbnail_url" db:"thumbnail_url"`
-	Requirements  Requirements `json:"requirements" db:"requirements"`
-	Hints         Hints        `json:"hints" db:"hints"`
-	Goals         Goals        `json:"goals" db:"goals"`
-	Tier          string       `json:"tier" db:"tier"` // 'free' or 'premium'
-	IsActive      bool         `json:"is_active" db:"is_active"`
-	CreatedAt     time.Time    `json:"created_at" db:"created_at"`
-	UpdatedAt     time.Time    `json:"updated_at" db:"updated_at"`
+	ID          string `json:"id" db:"id"`
+	Title       string `json:"title" db:"title"`
+	Description string `json:"description" db:"description"`
+	Category    string `json:"category" db:"category"`
+	Difficulty  string `json:"difficulty" db:"difficulty"`
+
+	ThumbnailURL *string      `json:"thumbnail_url" db:"thumbnail_url"`
+	Requirements Requirements `json:"requirements" db:"requirements"`
+	Hints        Hints        `json:"hints" db:"hints"`
+	Goals        Goals        `json:"goals" db:"goals"`
+	Tier         string       `json:"tier" db:"tier"` // 'free' or 'premium'
+	IsActive     bool         `json:"is_active" db:"is_active"`
+	CreatedAt    time.Time    `json:"created_at" db:"created_at"`
+	UpdatedAt    time.Time    `json:"updated_at" db:"updated_at"`
 }
 
 // Requirements represents scenario requirements

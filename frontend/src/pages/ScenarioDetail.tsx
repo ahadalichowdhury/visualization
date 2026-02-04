@@ -188,22 +188,7 @@ export const ScenarioDetail = () => {
               </svg>
               {scenario.category}
             </span>
-            <span className="text-gray-600 dark:text-gray-400 flex items-center gap-2">
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              {scenario.estimated_time} minutes
-            </span>
+
           </div>
 
           {/* Progress */}
@@ -236,14 +221,6 @@ export const ScenarioDetail = () => {
                   }}
                 ></div>
               </div>
-              {progress.score !== undefined && (
-                <div className="mt-3 text-sm text-gray-600 dark:text-gray-400 font-medium">
-                  Score:{" "}
-                  <span className="text-blue-600 dark:text-blue-400 font-bold">
-                    {progress.score}/100
-                  </span>
-                </div>
-              )}
             </div>
           )}
 
@@ -495,11 +472,6 @@ export const ScenarioDetail = () => {
                   💡 Reveal Next Hint ({revealedHints + 1} of{" "}
                   {scenario.hints.length})
                 </button>
-                {revealedHints > 0 && (
-                  <p className="text-sm text-center text-gray-500 dark:text-gray-400">
-                    Note: Using hints may affect your final score
-                  </p>
-                )}
               </div>
             ) : (
               <div className="text-center p-4 bg-gray-50 dark:bg-[#2d2d2d] rounded-lg border border-gray-200 dark:border-[#3e3e3e]">

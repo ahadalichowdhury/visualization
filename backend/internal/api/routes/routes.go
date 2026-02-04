@@ -125,16 +125,16 @@ func Setup(app *fiber.App, repo *database.Repository, jwtService *auth.JWTServic
 	// Admin routes (require admin role)
 	adminGroup := api.Group("/admin",
 		middleware.AuthMiddleware(jwtService),
-		middleware.RequireRole("admin"),
+		middleware.RequireSubscriptionTier("admin"),
 	)
 	adminGroup.Get("/users", adminHandler.GetAllUsers)
-	adminGroup.Put("/users/:id/role", adminHandler.UpdateUserRole)
+	adminGroup.Put("/users/:id/subscription", adminHandler.UpdateUserSubscriptionTier)
 	adminGroup.Post("/scenarios", scenarioHandler.CreateScenario)
 
 	// Pro/Premium routes (require pro or admin role)
 	proGroup := api.Group("/pro",
 		middleware.AuthMiddleware(jwtService),
-		middleware.RequireRole("pro", "admin"),
+		middleware.RequireSubscriptionTier("premium", "admin"),
 	)
 	proGroup.Get("/features", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{

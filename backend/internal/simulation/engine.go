@@ -30,7 +30,7 @@ func (e *Engine) Run() (*SimulationOutput, error) {
 	startTime := time.Now()
 
 	// Initialize state
-	if err := e.initializeState(); err != nil {
+	if err := e.InitializeState(); err != nil {
 		return nil, fmt.Errorf("failed to initialize state: %w", err)
 	}
 
@@ -93,8 +93,8 @@ func (e *Engine) Run() (*SimulationOutput, error) {
 	}, nil
 }
 
-// initializeState sets up the simulation state
-func (e *Engine) initializeState() error {
+// InitializeState sets up the simulation state
+func (e *Engine) InitializeState() error {
 	e.state = &SimulationState{
 		Tick:               0,
 		CurrentWorkloadRPS: 0,
@@ -311,7 +311,7 @@ func (e *Engine) calculateNodeOutgoing(node *NodeState, incomingRPS float64) flo
 	if node.Type == "database_sql" || node.Type == "database_nosql" || node.Type == "database_postgres" || node.Type == "database_mysql" || node.Type == "database_mongodb" {
 		readRatioFloat := float64(node.ReadRatio) / 100.0
 		writeRatio := 1.0 - readRatioFloat
-		
+
 		// Only Writes generate downstream events (CDC)
 		// Reads stop at the database (query response)
 		if writeRatio > 0 {
@@ -857,7 +857,7 @@ func calculateHardwarePerformance(nodeType string, config map[string]interface{}
 	case "load_balancer":
 		// Load balancer capacity from lbType
 		lbType := getString(config, "lbType", "alb")
-		
+
 		switch lbType {
 		case "alb":
 			capacityRPS = 50000.0

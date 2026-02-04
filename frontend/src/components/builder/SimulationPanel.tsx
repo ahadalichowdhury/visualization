@@ -1,17 +1,17 @@
 import { useEffect, useState } from "react";
-import { Node, Edge } from "reactflow";
+import { Edge, Node } from "reactflow";
 import { simulationService } from "../../services/simulation.service";
 import type {
-  SimulationOutput,
-  SimulationPreset,
-  WorkloadConfig,
+    SimulationOutput,
+    SimulationPreset,
+    WorkloadConfig,
 } from "../../types/simulation.types";
 import {
-  exportSummaryReport,
-  exportToCSV,
-  exportToJSON,
+    exportSummaryReport,
+    exportToCSV,
+    exportToJSON,
 } from "../../utils/exportUtils";
-import { showWarning, showError } from "../../utils/toast";
+import { showError, showWarning } from "../../utils/toast";
 import { NumericInput } from "../common/NumericInput";
 import { AlertsPanel } from "./AlertsPanel";
 import { NodeHeatmap } from "./NodeHeatmap";
@@ -27,6 +27,8 @@ interface PlaybackControl {
   onReset: () => void;
 }
 
+import type { Scenario } from "../../types/scenario.types";
+
 interface SimulationPanelProps {
   nodes: Node[];
   edges: Edge[];
@@ -35,6 +37,7 @@ interface SimulationPanelProps {
   onSimulationComplete?: (results: SimulationOutput) => void;
   onPlaybackControl?: PlaybackControl;
   onShowLatencyHeatmap?: () => void;
+  scenario?: Scenario | null; // Add scenario prop
 }
 
 export const SimulationPanel = ({
@@ -45,6 +48,7 @@ export const SimulationPanel = ({
   onSimulationComplete,
   onPlaybackControl,
   onShowLatencyHeatmap,
+  scenario,
 }: SimulationPanelProps) => {
   const [workload, setWorkload] = useState<WorkloadConfig>({
     rps: 10000,
@@ -706,9 +710,22 @@ export const SimulationPanel = ({
                 {/* Summary Cards */}
                 <div className="grid grid-cols-2 gap-4">
                   {/* Latency */}
-                  <div className="bg-white dark:bg-[#252526] p-4 rounded-lg border border-gray-200 dark:border-[#3e3e3e] shadow-sm">
-                    <div className="text-sm font-semibold text-gray-600 dark:text-[#9ca3af] mb-2">
-                      ⏱️ Latency
+                  <div className={`bg-white dark:bg-[#252526] p-4 rounded-lg border shadow-sm ${
+                    scenario && results.metrics.latency.p95 <= scenario.goals.max_latency_ms
+                      ? "border-green-200 dark:border-green-900/30 ring-1 ring-green-500/20"
+                      : scenario ? "border-red-200 dark:border-red-900/30 ring-1 ring-red-500/20" : "border-gray-200 dark:border-[#3e3e3e]"
+                  }`}>
+                    <div className="text-sm font-semibold text-gray-600 dark:text-[#9ca3af] mb-2 flex justify-between">
+                      <span>⏱️ Latency</span>
+                      {scenario && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          results.metrics.latency.p95 <= scenario.goals.max_latency_ms
+                            ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                            : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                        }`}>
+                          Goal: &lt;{scenario.goals.max_latency_ms}ms
+                        </span>
+                      )}
                     </div>
                     <div className="space-y-1">
                       <div className="flex justify-between text-xs">
@@ -723,7 +740,9 @@ export const SimulationPanel = ({
                         <span className="text-gray-600 dark:text-[#9ca3af]">
                           P95:
                         </span>
-                        <span className="font-bold text-gray-900 dark:text-[#cccccc]">
+                        <span className={`font-bold ${
+                           scenario && results.metrics.latency.p95 > scenario.goals.max_latency_ms ? "text-red-600" : "text-gray-900 dark:text-[#cccccc]"
+                        }`}>
                           {results.metrics.latency.p95?.toFixed(1) || 0}ms
                         </span>
                       </div>
@@ -731,7 +750,7 @@ export const SimulationPanel = ({
                         <span className="text-gray-600 dark:text-[#9ca3af]">
                           P99:
                         </span>
-                        <span className="font-bold text-red-600">
+                        <span className="font-bold text-gray-900 dark:text-[#cccccc]">
                           {results.metrics.latency.p99?.toFixed(1) || 0}ms
                         </span>
                       </div>
@@ -739,30 +758,56 @@ export const SimulationPanel = ({
                   </div>
 
                   {/* Throughput */}
-                  <div className="bg-white dark:bg-[#252526] p-4 rounded-lg border border-gray-200 dark:border-[#3e3e3e] shadow-sm">
-                    <div className="text-sm font-semibold text-gray-600 dark:text-[#9ca3af] mb-2">
-                      🚀 Success Throughput
+                  <div className={`bg-white dark:bg-[#252526] p-4 rounded-lg border shadow-sm ${
+                     scenario && results.metrics.throughput >= scenario.goals.min_throughput_rps
+                     ? "border-green-200 dark:border-green-900/30 ring-1 ring-green-500/20"
+                     : scenario ? "border-red-200 dark:border-red-900/30 ring-1 ring-red-500/20" : "border-gray-200 dark:border-[#3e3e3e]"
+                  }`}>
+                    <div className="text-sm font-semibold text-gray-600 dark:text-[#9ca3af] mb-2 flex justify-between">
+                      <span>🚀 Success RPS</span>
+                      {scenario && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          results.metrics.throughput >= scenario.goals.min_throughput_rps
+                            ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                            : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                        }`}>
+                           Goal: &gt;{scenario.goals.min_throughput_rps}
+                        </span>
+                      )}
                     </div>
-                    <div className="text-3xl font-bold text-green-600">
+                    <div className={`text-3xl font-bold ${
+                         scenario && results.metrics.throughput < scenario.goals.min_throughput_rps ? "text-red-600" : "text-green-600"
+                    }`}>
                       {(results.metrics.throughput / 1000).toFixed(1)}K
                     </div>
-                    <div className="text-xs text-gray-500 mt-1">RPS</div>
+                    <div className="text-xs text-gray-500 mt-1">Requests Per Second</div>
                   </div>
 
                   {/* Error Rate */}
                   <div
                     className={`bg-white dark:bg-[#252526] p-4 rounded-lg border shadow-sm ${
-                      results.metrics.errorRate > 0.05
-                        ? "border-red-300 bg-red-50"
+                      (scenario && (results.metrics.errorRate * 100) > scenario.goals.max_error_rate_percent) || results.metrics.errorRate > 0.05
+                        ? "border-red-300 bg-red-50 dark:bg-red-900/10"
+                        : (scenario && (results.metrics.errorRate * 100) <= scenario.goals.max_error_rate_percent)
+                        ? "border-green-200 dark:border-green-900/30 ring-1 ring-green-500/20"
                         : "border-gray-200 dark:border-[#3e3e3e]"
                     }`}
                   >
-                    <div className="text-sm font-semibold text-gray-600 dark:text-[#9ca3af] mb-2">
-                      ❌ Error Rate
+                    <div className="text-sm font-semibold text-gray-600 dark:text-[#9ca3af] mb-2 flex justify-between">
+                      <span>❌ Error Rate</span>
+                       {scenario && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          (results.metrics.errorRate * 100) <= scenario.goals.max_error_rate_percent
+                            ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                            : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                        }`}>
+                           Goal: &lt;{scenario.goals.max_error_rate_percent}%
+                        </span>
+                      )}
                     </div>
                     <div
                       className={`text-3xl font-bold ${
-                        results.metrics.errorRate > 0.05
+                        results.metrics.errorRate > 0.05 || (scenario && (results.metrics.errorRate * 100) > scenario.goals.max_error_rate_percent)
                           ? "text-red-600"
                           : "text-green-600"
                       }`}

@@ -23,16 +23,16 @@ func NewScenarioHandler(repo *database.Repository) *ScenarioHandler {
 // GetAllScenarios returns all active scenarios (filtered by user role)
 // GET /scenarios
 func (h *ScenarioHandler) GetAllScenarios(c *fiber.Ctx) error {
-	// Get user role if authenticated, default to "free" if not
-	userRole := "free"
+	// Get user subscription tier if authenticated, default to "free" if not
+	subscriptionTier := "free"
 	if c.Locals("userID") != nil {
-		userRoleStr := c.Locals("userRole")
-		if userRoleStr != nil {
-			userRole = userRoleStr.(string)
+		subscriptionTierStr := c.Locals("subscriptionTier")
+		if subscriptionTierStr != nil {
+			subscriptionTier = subscriptionTierStr.(string)
 		}
 	}
 
-	scenarios, err := h.repo.GetScenariosForUserRole(userRole)
+	scenarios, err := h.repo.GetScenariosForUserRole(subscriptionTier)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to fetch scenarios",
@@ -57,7 +57,16 @@ func (h *ScenarioHandler) GetScenariosPaginated(c *fiber.Ctx) error {
 		limit = 10
 	}
 
-	scenarios, nextCursor, hasMore, err := h.repo.GetScenariosPaginated(cursor, limit, category, difficulty, tier, search)
+	// Get user subscription tier if authenticated
+	subscriptionTier := "free"
+	if c.Locals("userID") != nil {
+		subscriptionTierStr := c.Locals("subscriptionTier")
+		if subscriptionTierStr != nil {
+			subscriptionTier = subscriptionTierStr.(string)
+		}
+	}
+
+	scenarios, nextCursor, hasMore, err := h.repo.GetScenariosPaginated(subscriptionTier, cursor, limit, category, difficulty, tier, search)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to fetch scenarios",
@@ -76,17 +85,17 @@ func (h *ScenarioHandler) GetScenariosPaginated(c *fiber.Ctx) error {
 func (h *ScenarioHandler) GetScenarioByID(c *fiber.Ctx) error {
 	scenarioID := c.Params("id")
 
-	// Get user role if authenticated, default to "free" if not
-	userRole := "free"
+	// Get user subscription tier if authenticated, default to "free" if not
+	subscriptionTier := "free"
 	if c.Locals("userID") != nil {
-		userRoleStr := c.Locals("userRole")
-		if userRoleStr != nil {
-			userRole = userRoleStr.(string)
+		subscriptionTierStr := c.Locals("subscriptionTier")
+		if subscriptionTierStr != nil {
+			subscriptionTier = subscriptionTierStr.(string)
 		}
 	}
 
 	// Check if user can access this scenario
-	canAccess, err := h.repo.CanUserAccessScenario(userRole, scenarioID)
+	canAccess, err := h.repo.CanUserAccessScenario(subscriptionTier, scenarioID)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Scenario not found",
@@ -145,15 +154,15 @@ func (h *ScenarioHandler) GetScenarioCategories(c *fiber.Ctx) error {
 // GET /user/scenarios
 func (h *ScenarioHandler) GetUserScenarios(c *fiber.Ctx) error {
 	userID := c.Locals("userID").(string)
-	
-	// Get user role
-	userRole := "free"
-	userRoleStr := c.Locals("userRole")
-	if userRoleStr != nil {
-		userRole = userRoleStr.(string)
+
+	// Get user subscription tier
+	subscriptionTier := "free"
+	subscriptionTierStr := c.Locals("subscriptionTier")
+	if subscriptionTierStr != nil {
+		subscriptionTier = subscriptionTierStr.(string)
 	}
 
-	scenarios, err := h.repo.GetUserScenariosWithProgressForRole(userID, userRole)
+	scenarios, err := h.repo.GetUserScenariosWithProgressForRole(userID, subscriptionTier)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to fetch user scenarios",
@@ -167,6 +176,14 @@ func (h *ScenarioHandler) GetUserScenarios(c *fiber.Ctx) error {
 // GET /user/scenarios/paginated?cursor=xyz&limit=10&category=X&difficulty=Y&tier=Z&search=W
 func (h *ScenarioHandler) GetUserScenariosPaginated(c *fiber.Ctx) error {
 	userID := c.Locals("userID").(string)
+
+	// Get user subscription tier
+	subscriptionTier := "free"
+	subscriptionTierStr := c.Locals("subscriptionTier")
+	if subscriptionTierStr != nil {
+		subscriptionTier = subscriptionTierStr.(string)
+	}
+
 	cursor := c.Query("cursor", "")
 	limit := c.QueryInt("limit", 10)
 	category := c.Query("category", "")
@@ -179,7 +196,7 @@ func (h *ScenarioHandler) GetUserScenariosPaginated(c *fiber.Ctx) error {
 		limit = 10
 	}
 
-	scenarios, nextCursor, hasMore, err := h.repo.GetUserScenariosWithProgressPaginated(userID, cursor, limit, category, difficulty, tier, search)
+	scenarios, nextCursor, hasMore, err := h.repo.GetUserScenariosWithProgressPaginated(userID, subscriptionTier, cursor, limit, category, difficulty, tier, search)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to fetch user scenarios",
@@ -199,15 +216,15 @@ func (h *ScenarioHandler) GetUserScenarioProgress(c *fiber.Ctx) error {
 	userID := c.Locals("userID").(string)
 	scenarioID := c.Params("id")
 
-	// Get user role
-	userRole := "free"
-	userRoleStr := c.Locals("userRole")
-	if userRoleStr != nil {
-		userRole = userRoleStr.(string)
+	// Get user subscription tier
+	subscriptionTier := "free"
+	subscriptionTierStr := c.Locals("subscriptionTier")
+	if subscriptionTierStr != nil {
+		subscriptionTier = subscriptionTierStr.(string)
 	}
 
 	// Check if user can access this scenario
-	canAccess, err := h.repo.CanUserAccessScenario(userRole, scenarioID)
+	canAccess, err := h.repo.CanUserAccessScenario(subscriptionTier, scenarioID)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Scenario not found",
@@ -251,15 +268,15 @@ func (h *ScenarioHandler) UpdateUserScenarioProgress(c *fiber.Ctx) error {
 	userID := c.Locals("userID").(string)
 	scenarioID := c.Params("id")
 
-	// Get user role
-	userRole := "free"
-	userRoleStr := c.Locals("userRole")
-	if userRoleStr != nil {
-		userRole = userRoleStr.(string)
+	// Get user subscription tier
+	subscriptionTier := "free"
+	subscriptionTierStr := c.Locals("subscriptionTier")
+	if subscriptionTierStr != nil {
+		subscriptionTier = subscriptionTierStr.(string)
 	}
 
 	// Check if user can access this scenario
-	canAccess, err := h.repo.CanUserAccessScenario(userRole, scenarioID)
+	canAccess, err := h.repo.CanUserAccessScenario(subscriptionTier, scenarioID)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Scenario not found",
@@ -365,6 +382,9 @@ func (h *ScenarioHandler) updateUserGlobalProgress(userID string) {
 
 	// Update the progress table with new completed count
 	_ = h.repo.UpdateUserCompletedScenariosCount(userID, completedCount)
+
+	// Update streak
+	_ = h.repo.UpdateUserStreak(userID)
 }
 
 // CreateScenario creates a new scenario (admin only)

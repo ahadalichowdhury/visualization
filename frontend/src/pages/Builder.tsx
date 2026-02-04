@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import ReactFlow, {
-  addEdge,
-  Background,
-  BackgroundVariant,
-  Connection,
-  Edge,
-  MarkerType,
-  MiniMap,
-  NodeTypes,
-  Node as ReactFlowNode,
-  SelectionMode,
-  useEdgesState,
-  useNodesState,
+    addEdge,
+    Background,
+    BackgroundVariant,
+    Connection,
+    Edge,
+    MarkerType,
+    MiniMap,
+    NodeTypes,
+    Node as ReactFlowNode,
+    SelectionMode,
+    useEdgesState,
+    useNodesState,
 } from "reactflow";
 import "reactflow/dist/style.css";
 
@@ -29,23 +29,28 @@ import { HardwareConfigPanel } from "../components/builder/HardwareConfigPanel";
 import { LatencyHeatmap } from "../components/builder/LatencyHeatmap";
 import { NodeContextMenu } from "../components/builder/NodeContextMenu";
 import { NodePalette } from "../components/builder/NodePalette";
+import { RemoteCursor } from "../components/builder/RemoteCursor";
 import { ScenarioInfoPanel } from "../components/builder/ScenarioInfoPanel";
+import { ShareDialog } from "../components/builder/ShareDialog";
 import { SimulationPanel } from "../components/builder/SimulationPanel";
 import { TemplateModal } from "../components/builder/TemplateModal";
+import { MobileCanvasWarning } from "../components/common/MobileCanvasWarning";
 import type { ArchitectureTemplate } from "../data/templates";
+import { useCollaboration } from "../hooks/useCollaboration";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 import { architectureService } from "../services/architecture.service";
 import { scenarioService } from "../services/scenario.service";
 import { useAuthStore } from "../store/authStore";
 import type {
-  NodeConfig,
-  NodeData,
-  NodeTypeDefinition,
+    NodeConfig,
+    NodeData,
+    NodeTypeDefinition,
 } from "../types/builder.types";
 import { isValidConnection } from "../types/builder.types";
 import type { Scenario } from "../types/scenario.types";
 import type { SimulationOutput } from "../types/simulation.types";
 import { getDefaultConfig } from "../utils/configCalculator";
+import { generateRoomId } from "../utils/roomUtils";
 import { showError, showInfo, showSuccess, showWarning } from "../utils/toast";
 
 const nodeTypes: NodeTypes = {
@@ -69,9 +74,16 @@ interface ClipboardState {
 }
 
 export const Builder = () => {
-  const { scenarioId } = useParams<{ scenarioId: string }>();
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { scenarioId, roomId } = useParams<{ scenarioId: string; roomId: string }>();
+  
+  // Initialize from navigation state if available (for handling transition to collaboration room)
+  const initialNodes = location.state?.nodes || [];
+  const initialEdges = location.state?.edges || [];
+  
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedNode, setSelectedNode] = useState<ReactFlowNode | null>(null);
   const [isConfigPanelOpen, setIsConfigPanelOpen] = useState(false);
   const [history, setHistory] = useState<HistoryState[]>([]);
@@ -113,15 +125,278 @@ export const Builder = () => {
   const [isSimulationPlaying, setIsSimulationPlaying] = useState(false);
   const [showLatencyHeatmap, setShowLatencyHeatmap] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [isCollaborationEnabled, setIsCollaborationEnabled] = useState(false);
+  const [collaborationRoomId, setCollaborationRoomId] = useState<string | null>(null);
+  const [showShareDialog, setShowShareDialog] = useState(false);
   const nodeIdCounter = useRef(0);
   const edgeIdCounter = useRef(0);
-  const { isAuthenticated } = useAuthStore();
+  const isReceivingRemoteUpdate = useRef(false);
+  const lastSentNodesJson = useRef<string>('[]');
+  const lastSentEdgesJson = useRef<string>('[]');
+  const { isAuthenticated, user } = useAuthStore();
 
   // Check if this is a free canvas (no scenario)
   const isFreeCanvas = !scenarioId;
 
-  // Fetch scenario and load saved architecture if exists
+  // Auto-enable collaboration if we are in a room URL
   useEffect(() => {
+    if (roomId && !isCollaborationEnabled) {
+      console.log('🔄 Auto-enabling collaboration for room:', roomId);
+      setIsCollaborationEnabled(true);
+      // Also verify nodes/edges are sent if we are the host
+      if (location.state?.isHost) {
+        // The existing useEffect for sending updates will trigger once isConnected becomes true
+        console.log('👑 Host detected, will sync state once connected');
+      }
+    }
+  }, [roomId, location.state]);
+  
+  // Determine the session ID for collaboration
+  const collaborationSessionId = useMemo(() => {
+    console.log('🔍 Determining collaborationSessionId:', { roomId, collaborationRoomId });
+    // If we have a roomId from URL, use it (user joined via share link)
+    if (roomId) {
+      console.log('✅ Using roomId from URL:', roomId);
+      return roomId;
+    }
+    // If we have a generated room ID, use it (user created the room)
+    if (collaborationRoomId) {
+      console.log('✅ Using generated collaborationRoomId:', collaborationRoomId);
+      return collaborationRoomId;
+    }
+    // Fallback for non-collaborative sessions
+    console.log('⚠️  No room ID available, returning null');
+    return null;
+  }, [roomId, collaborationRoomId]);
+
+  // Generate a stable temp session ID for non-collaborative sessions (only once)
+  const tempSessionIdRef = useRef(`temp-${Date.now()}`);
+  const stableSessionId = collaborationSessionId || tempSessionIdRef.current;
+  
+  console.log('🎯 Final stableSessionId:', stableSessionId, {
+    collaborationSessionId,
+    tempFallback: tempSessionIdRef.current,
+  });
+
+  // Initialize real-time collaboration
+  const collaboration = useCollaboration({
+    sessionId: stableSessionId,
+    userId: user?.id || "anonymous",
+    userName: user?.name || "Guest",
+    enabled: isCollaborationEnabled && isAuthenticated,
+    shouldLoadInitialState: !location.state?.isHost,
+    onNodesChange: (remoteNodes) => {
+      // Update nodes from remote users
+      console.log('📥 Received nodes from backend:', remoteNodes.length);
+      isReceivingRemoteUpdate.current = true;
+      
+      // Update tracking before setting state
+      lastSentNodesJson.current = JSON.stringify(remoteNodes);
+      
+      setNodes(remoteNodes);
+      
+      // Reset flag after state update completes
+      setTimeout(() => {
+        isReceivingRemoteUpdate.current = false;
+      }, 50);
+    },
+    onEdgesChange: (remoteEdges) => {
+      // Update edges from remote users
+      console.log('📥 Received edges from backend:', remoteEdges.length);
+      isReceivingRemoteUpdate.current = true;
+      
+      // Update tracking before setting state
+      lastSentEdgesJson.current = JSON.stringify(remoteEdges);
+      
+      setEdges(remoteEdges);
+      
+      // Reset flag after state update completes
+      setTimeout(() => {
+        isReceivingRemoteUpdate.current = false;
+      }, 50);
+    },
+    onSessionEnded: (reason) => {
+      // Logic for when host ends the session
+      if (isCollaborationEnabled) {
+        setIsCollaborationEnabled(false);
+        setCollaborationRoomId(null);
+        
+        const message = reason || "The host has ended the collaboration session.";
+        
+        // If it's a "Room not found" error, show a error toast to ensure user sees it
+        if (message.includes("not found")) {
+             showError(message);
+        } else {
+             showInfo(message);
+        }
+        
+        // If we are in a room URL, navigate back to clean canvas or dashboard
+        if (roomId) {
+          navigate('/canvas'); 
+        }
+      }
+    }
+  });
+
+  // Send node updates to collaborators when nodes change (but not when receiving remote updates)
+  useEffect(() => {
+    if (isCollaborationEnabled && collaboration.isConnected && isAuthenticated && !isReceivingRemoteUpdate.current) {
+      // Only send if nodes actually changed (prevent duplicate sends)
+      const currentNodesJson = JSON.stringify(nodes);
+      if (currentNodesJson !== lastSentNodesJson.current) {
+        lastSentNodesJson.current = currentNodesJson;
+        collaboration.sendNodesUpdate(nodes);
+      }
+    }
+  }, [nodes, isCollaborationEnabled, collaboration.isConnected, isAuthenticated, collaboration]);
+
+  // Send edge updates to collaborators when edges change (but not when receiving remote updates)
+  useEffect(() => {
+    if (isCollaborationEnabled && collaboration.isConnected && isAuthenticated && !isReceivingRemoteUpdate.current) {
+      // Only send if edges actually changed (prevent duplicate sends)
+      const currentEdgesJson = JSON.stringify(edges);
+      if (currentEdgesJson !== lastSentEdgesJson.current) {
+        lastSentEdgesJson.current = currentEdgesJson;
+        collaboration.sendEdgesUpdate(edges);
+      }
+    }
+  }, [edges, isCollaborationEnabled, collaboration.isConnected, isAuthenticated, collaboration]);
+
+  // ==================== VERSIONING HELPERS (Excalidraw-style) ====================
+  const versionRef = useRef<Map<string, number>>(new Map()); // Track version for each element
+
+  // Get next version for an element
+  const getNextVersion = useCallback((id: string): number => {
+    const currentVersion = versionRef.current.get(id) || 0;
+    const nextVersion = currentVersion + 1;
+    versionRef.current.set(id, nextVersion);
+    return nextVersion;
+  }, []);
+
+  // TODO: These helpers will be used when we enable versioning in node/edge operations
+  // Add version metadata to nodes
+  // const addVersionToNodes = useCallback((nodes: BuilderNode[]): BuilderNode[] => {
+  //   return nodes.map(node => ({
+  //     ...node,
+  //     version: getNextVersion(node.id),
+  //     lastModifiedBy: user?.id || "anonymous",
+  //     lastModifiedAt: Date.now(),
+  //     data: {
+  //       ...node.data,
+  //       version: getNextVersion(node.id),
+  //       lastModifiedBy: user?.id || "anonymous",
+  //       lastModifiedAt: Date.now(),
+  //     },
+  //   }));
+  // }, [getNextVersion, user?.id]);
+
+  // Add version metadata to edges
+  // const addVersionToEdges = useCallback((edges: BuilderEdge[]): BuilderEdge[] => {
+  //   return edges.map(edge => ({
+  //     ...edge,
+  //     version: getNextVersion(edge.id),
+  //     lastModifiedBy: user?.id || "anonymous",
+  //     lastModifiedAt: Date.now(),
+  //   }));
+  // }, [getNextVersion, user?.id]);
+
+  // Soft delete (tombstone) nodes - mark as deleted instead of removing
+  // const tombstoneNodes = useCallback((nodeIds: string[]): void => {
+  //   setNodes((nds: ReactFlowNode[]) =>
+  //     nds.map(node => {
+  //       if (nodeIds.includes(node.id)) {
+  //         const versionedNode = {
+  //           ...node,
+  //           isDeleted: true,
+  //           version: getNextVersion(node.id),
+  //           lastModifiedBy: user?.id || "anonymous",
+  //           lastModifiedAt: Date.now(),
+  //         };
+  //         // Broadcast tombstoned node
+  //         if (isCollaborationEnabled && collaboration.isConnected) {
+  //           collaboration.sendNodesUpdate([versionedNode]);
+  //         }
+  //         return versionedNode;
+  //       }
+  //       return node;
+  //     })
+  //   );
+  // }, [setNodes, getNextVersion, user?.id, isCollaborationEnabled, collaboration]);
+
+  // Filter out deleted nodes from display (conflict resolution will filter these automatically)
+  // const visibleNodes = useMemo(() => {
+  //   return nodes.filter(node => !(node as any).isDeleted);
+  // }, [nodes]);
+
+  // Filter out deleted edges from display
+  // const visibleEdges = useMemo(() => {
+  //   return edges.filter(edge => !(edge as any).isDeleted);
+  // }, [edges]);
+
+  // Prevent unused variable warning
+  void getNextVersion;
+
+  // Auto-enable collaboration if joining via room link (only on initial load, not when already in a room)
+  const hasAutoEnabledRef = useRef(false);
+  useEffect(() => {
+    // Only auto-enable if:
+    // 1. roomId exists in URL
+    // 2. Collaboration is currently disabled
+    // 3. We haven't already auto-enabled for this session
+    if (roomId && !isCollaborationEnabled && !hasAutoEnabledRef.current) {
+      console.log('🔗 Auto-enabling collaboration for room:', roomId);
+      setIsCollaborationEnabled(true);
+      hasAutoEnabledRef.current = true;
+      showInfo(`Connecting to collaboration room: ${roomId}...`);
+    }
+    
+    // Reset flag if roomId changes or is cleared
+    if (!roomId) {
+      hasAutoEnabledRef.current = false;
+    }
+  }, [roomId, isCollaborationEnabled]);
+
+  // Send initial canvas state when connected (SIMPLE: Just send it!)
+  // Send initial canvas state ONLY ONCE when first connecting
+  const hasInitialSyncRun = useRef(false);
+  useEffect(() => {
+    if (collaboration.isConnected && isCollaborationEnabled && isAuthenticated && !hasInitialSyncRun.current) {
+      console.log('📤 Sending my current canvas to backend:', nodes.length, 'nodes', edges.length, 'edges');
+      
+      // Only send if we have local data (we're the room creator)
+      if (nodes.length > 0 || edges.length > 0) {
+        // Send without throttling for initial sync
+        isReceivingRemoteUpdate.current = true; // Prevent echo
+        collaboration.sendNodesUpdate(nodes);
+        collaboration.sendEdgesUpdate(edges);
+        console.log('✅ Initial canvas state sent');
+        setTimeout(() => {
+          isReceivingRemoteUpdate.current = false;
+        }, 100);
+      } else {
+        console.log('ℹ️  No local canvas data to send (waiting for server state)');
+      }
+      
+      hasInitialSyncRun.current = true;
+    }
+    
+    // Reset flag when disconnected
+    if (!collaboration.isConnected) {
+      hasInitialSyncRun.current = false;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collaboration.isConnected, isCollaborationEnabled, isAuthenticated, nodes, edges]);
+
+  // Fetch scenario and load saved architecture if exists
+  // IMPORTANT: Skip loading saved architecture when joining a collaboration room!
+  useEffect(() => {
+    // If user is joining a collaboration room via link, don't load their own saved architecture
+    // The collaboration sync will provide the shared diagram
+    if (roomId) {
+      console.log('🔗 Joining collaboration room - skipping local architecture load');
+      return;
+    }
+
     const fetchScenarioAndArchitecture = async () => {
       if (scenarioId) {
         try {
@@ -402,7 +677,7 @@ export const Builder = () => {
     };
     fetchScenarioAndArchitecture();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scenarioId, isAuthenticated]);
+  }, [scenarioId, isAuthenticated, roomId]); // Added roomId to prevent loading saved arch when joining collab room
 
   // Auto-save effect - save every 3 seconds when there are unsaved changes
   useEffect(() => {
@@ -426,6 +701,9 @@ export const Builder = () => {
 
   // Show initial save dialog for new architectures when user adds first node
   useEffect(() => {
+    // Skip if in collaboration room (guest should not be forced to save host's canvas)
+    if (roomId) return;
+
     if (
       !currentArchitectureId &&
       nodes.length > 0 &&
@@ -502,6 +780,68 @@ export const Builder = () => {
         `Duration: ${config.duration}s\n` +
         `${config.autoRecover ? "✅ Will auto-recover" : "⚠️ Manual recovery required"}`,
     );
+  };
+
+  // Handle simulation completion and update progress
+  const handleSimulationComplete = async (results: SimulationOutput) => {
+    setSimulationResults(results);
+
+    // If we have a scenario, calculate score and update progress
+    if (scenario && isAuthenticated) {
+      const goals = scenario.goals;
+      const metrics = results.metrics;
+      let goalsMet = 0;
+      const totalGoals = 4; // Latency, Error, Throughput, Regions
+
+      // 1. Latency Check
+      const latencyMet = metrics.latency.p95 <= goals.max_latency_ms;
+      if (latencyMet) goalsMet++;
+
+      // 2. Error Rate Check
+      const errorRateMet = (metrics.errorRate * 100) <= goals.max_error_rate_percent;
+      if (errorRateMet) goalsMet++;
+
+      // 3. Throughput Check
+      const throughputMet = metrics.throughput >= goals.min_throughput_rps;
+      if (throughputMet) goalsMet++;
+
+      // 4. Regions Check
+      // Check regions from the first time series point (workload distribution)
+      const usedRegions = Object.keys(results.timeSeries[0]?.regionTrafficMap || {});
+      const regionsMet = goals.must_support_regions.every(r => usedRegions.includes(r));
+      if (regionsMet) goalsMet++;
+
+      // Calculate Score (0-100)
+      const score = Math.round((goalsMet / totalGoals) * 100);
+
+      // Determine Status
+      const isSuccess = goalsMet === totalGoals;
+      const status = isSuccess ? "completed" : "in_progress";
+
+      // Update backend
+      try {
+        await scenarioService.updateProgress(scenario.id, {
+          status: status,
+          steps_completed: goalsMet,
+          total_steps: totalGoals,
+          score: score,
+          score_breakdown: {
+             latency: latencyMet ? 25 : 0,
+             throughput: throughputMet ? 25 : 0,
+             errors: errorRateMet ? 25 : 0,
+             hints_penalty: 0 
+          } as any
+        });
+        
+        if (isSuccess) {
+           showSuccess(`🎉 Scenario Completed Successfully!`);
+        } else {
+           showInfo(`Progress Saved. Keep optimizing!`);
+        }
+      } catch (error) {
+        console.error("Failed to update progress:", error);
+      }
+    }
   };
 
   // Show save dialog (only for first-time save or manual save)
@@ -770,6 +1110,19 @@ export const Builder = () => {
     setSimulationResults(null);
     setCurrentTick(0);
     setIsSimulationPlaying(false);
+    
+    // IMPORTANT: Disable collaboration and clear room when creating new canvas
+    if (isCollaborationEnabled) {
+      setIsCollaborationEnabled(false);
+      setCollaborationRoomId(null);
+      console.log('🔌 Disabled collaboration for new canvas');
+    }
+    
+    // Clear room ID from URL if present
+    if (roomId) {
+      navigate('/canvas');
+      console.log('🔌 Cleared room ID from URL');
+    }
 
     showInfo("New canvas created. Your previous work is saved!");
   };
@@ -1267,10 +1620,31 @@ export const Builder = () => {
   // On node click
   const onNodeClick = useCallback(
     (_event: React.MouseEvent, node: ReactFlowNode) => {
+      // Check if node is locked by another user
+      if (
+        isCollaborationEnabled &&
+        collaboration.isNodeLockedByOther(node.id)
+      ) {
+        const locker = collaboration.getNodeLocker(node.id);
+        showWarning(
+          `This node is currently being edited by ${locker?.name || "another user"}.`,
+        );
+        return;
+      }
+
+      // Lock the node if collaboration is enabled
+      if (
+        isCollaborationEnabled &&
+        collaboration.isConnected &&
+        isAuthenticated
+      ) {
+        collaboration.lockNode(node.id);
+      }
+
       setSelectedNode(node);
       setIsConfigPanelOpen(true);
     },
-    [],
+    [isCollaborationEnabled, collaboration, isAuthenticated],
   );
 
   // On pane click
@@ -1698,12 +2072,31 @@ export const Builder = () => {
             setAutoSaveEnabled(false);
             setLastSavedAt(null);
             setHasUnsavedChanges(false);
+            
+            // Disable collaboration when clearing
+            if (isCollaborationEnabled) {
+              setIsCollaborationEnabled(false);
+              setCollaborationRoomId(null);
+            }
+            if (roomId) {
+              navigate('/canvas');
+            }
+            
             showInfo("Canvas cleared. Your previous work is saved!");
           } else if (nodes.length > 0) {
             // Clear without confirm (already checked above)
             saveToHistory();
             setNodes([]);
             setEdges([]);
+            
+            // Disable collaboration when clearing
+            if (isCollaborationEnabled) {
+              setIsCollaborationEnabled(false);
+              setCollaborationRoomId(null);
+            }
+            if (roomId) {
+              navigate('/canvas');
+            }
           }
         }}
         onShowRequirements={() => setIsScenarioPanelOpen(true)}
@@ -1714,6 +2107,66 @@ export const Builder = () => {
         lastSavedAt={lastSavedAt}
         hasUnsavedChanges={hasUnsavedChanges}
         autoSaveEnabled={autoSaveEnabled}
+        isCollaborationEnabled={isCollaborationEnabled}
+        isCollaborationConnected={collaboration.isConnected}
+        onToggleCollaboration={isFreeCanvas ? () => {
+          if (!isAuthenticated) {
+            showWarning("Please log in to use real-time collaboration");
+            setShowAuthModal(true);
+            return;
+          }
+          
+          if (!isCollaborationEnabled) {
+            // Enabling collaboration
+            if (!roomId && !collaborationRoomId) {
+              // Generate new room ID and navigate to room URL
+              const newRoomId = generateRoomId();
+              setCollaborationRoomId(newRoomId);
+              
+              // Navigate to room URL
+              navigate(`/canvas/room/${newRoomId}`, { 
+                state: { 
+                  nodes, 
+                  edges,
+                  isHost: true 
+                } 
+              });
+              
+              setIsCollaborationEnabled(true);
+              setShowShareDialog(true); // Show share dialog
+              showSuccess("Collaboration room created! Share the link with others.");
+            } else {
+              // Already have a room, just enable
+              setIsCollaborationEnabled(true);
+              setShowShareDialog(true);
+              showSuccess("Real-time collaboration enabled!");
+            }
+          } else {
+            // Disabling collaboration
+            
+            // If Host: End Session for Everyone
+            if (location.state?.isHost || !roomId) {
+                 collaboration.endSession();
+                 showInfo("Requesting session shutdown...");
+                 // We do NOT disable locally yet. We wait for the 'session_ended' event
+                 // from the backend (handled in useCollaboration hook) to confirm,
+                 // which will then trigger the local cleanup and navigation.
+            } else {
+               // If Guest: Just Leave (Local Disconnect)
+               if (confirm("Leave the collaboration session?")) {
+                 setIsCollaborationEnabled(false);
+                 setCollaborationRoomId(null);
+                 setShowShareDialog(false);
+                 navigate('/canvas');
+                 showInfo("Left collaboration session.");
+               }
+            }
+          }
+        } : undefined}
+        onShowShareDialog={() => setShowShareDialog(true)}
+        users={collaboration.users}
+        currentUserId={user?.id}
+        isHost={!roomId || !!location.state?.isHost}
       />
 
       <div className="flex-1 flex overflow-hidden relative">
@@ -1736,11 +2189,40 @@ export const Builder = () => {
           </button>
         </div>
         {/* Canvas */}
-        <div className="flex-1 relative">
+        <div
+          className="flex-1 relative"
+          onMouseMove={(e) => {
+            if (
+              isCollaborationEnabled &&
+              collaboration.isConnected &&
+              isAuthenticated
+            ) {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const x = e.clientX - rect.left;
+              const y = e.clientY - rect.top;
+              collaboration.sendCursorMove(x, y);
+            }
+          }}
+        >
           <CanvasToolbar
             mode={interactionMode}
             onChangeMode={setInteractionMode}
           />{" "}
+          {/* Remote Cursors */}
+          {isCollaborationEnabled &&
+            collaboration.users
+              .filter((u) => u.id !== user?.id)
+              .map((remoteUser) => {
+                const position = collaboration.cursorPositions[remoteUser.id];
+                if (!position) return null;
+                return (
+                  <RemoteCursor
+                    key={remoteUser.id}
+                    user={remoteUser}
+                    position={position}
+                  />
+                );
+              })}
           <ReactFlow
             panOnDrag={interactionMode === "hand"}
             selectionOnDrag={interactionMode === "pointer"}
@@ -1776,7 +2258,18 @@ export const Builder = () => {
             selectedNode={selectedNode}
             onUpdateNode={handleUpdateNode}
             onDeleteNode={handleDeleteNode}
-            onClose={() => setIsConfigPanelOpen(false)}
+            onClose={() => {
+              // Unlock the node when closing config panel
+              if (
+                isCollaborationEnabled &&
+                collaboration.isConnected &&
+                isAuthenticated &&
+                selectedNode
+              ) {
+                collaboration.unlockNode(selectedNode.id);
+              }
+              setIsConfigPanelOpen(false);
+            }}
           />
         )}
         {/* Template Modal */}
@@ -1845,17 +2338,15 @@ export const Builder = () => {
             onToggle={() => setIsScenarioPanelOpen(!isScenarioPanelOpen)}
           />
         )}
+
         {/* Simulation Panel */}
         <SimulationPanel
           nodes={nodes}
           edges={edges}
           isOpen={isSimulationPanelOpen}
           onToggle={() => setIsSimulationPanelOpen(!isSimulationPanelOpen)}
-          onSimulationComplete={(results) => {
-            setSimulationResults(results);
-            setCurrentTick(0);
-            setIsSimulationPlaying(true);
-          }}
+          onSimulationComplete={handleSimulationComplete}
+          scenario={scenario}
           onShowLatencyHeatmap={() => setShowLatencyHeatmap(true)}
           onPlaybackControl={{
             isPlaying: isSimulationPlaying,
@@ -1971,6 +2462,15 @@ export const Builder = () => {
           onSuccess={handleAuthSuccess}
           message="Please sign in or create an account to save your architecture"
         />
+        
+        {/* Share Dialog */}
+        {showShareDialog && (roomId || collaborationRoomId) && (
+          <ShareDialog
+            roomId={roomId || collaborationRoomId!}
+            isOpen={showShareDialog}
+            onClose={() => setShowShareDialog(false)}
+          />
+        )}
       </div>
 
       <BuilderFooter
@@ -1989,6 +2489,9 @@ export const Builder = () => {
         simulationResults={simulationResults}
         currentTick={currentTick}
       />
+
+      {/* Mobile Canvas Warning */}
+      <MobileCanvasWarning isCanvas={true} />
     </div>
   );
 };

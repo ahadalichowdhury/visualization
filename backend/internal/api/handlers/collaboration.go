@@ -1,22 +1,23 @@
 package handlers
 
 import (
-	"context"
+	"encoding/json"
+	"log"
+	"time"
 
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
-	"github.com/google/uuid"
 	"github.com/yourusername/visualization-backend/internal/database"
 	ws "github.com/yourusername/visualization-backend/internal/websocket"
 )
 
-// CollaborationHandler handles real-time collaboration endpoints
+// CollaborationHandler handles real-time collaboration
 type CollaborationHandler struct {
 	hub  *ws.Hub
 	repo *database.Repository
 }
 
-// NewCollaborationHandler creates a new collaboration handler
+// NewCollaborationHandler creates a new CollaborationHandler
 func NewCollaborationHandler(hub *ws.Hub, repo *database.Repository) *CollaborationHandler {
 	return &CollaborationHandler{
 		hub:  hub,
@@ -24,73 +25,100 @@ func NewCollaborationHandler(hub *ws.Hub, repo *database.Repository) *Collaborat
 	}
 }
 
-// HandleWebSocket upgrades HTTP connection to WebSocket for collaboration
+// HandleWebSocket handles WebSocket connections for collaboration
 func (h *CollaborationHandler) HandleWebSocket(c *websocket.Conn) {
-	// Get session ID, user ID, user name, and architecture ID from query params
+	// Get connection params
 	sessionID := c.Query("sessionId")
 	userID := c.Query("userId")
 	userName := c.Query("userName")
-	architectureID := c.Query("architectureId") // Architecture ID for permission check
 
-	if sessionID == "" || userID == "" || userName == "" {
-		c.WriteMessage(websocket.CloseMessage, []byte("Missing required parameters"))
+	if sessionID == "" || userID == "" {
+		log.Printf("❌ Missing sessionId or userId in WebSocket connection")
 		c.Close()
 		return
 	}
 
-	// If architecture ID is provided, check collaboration access
-	if architectureID != "" {
-		userUUID, err := uuid.Parse(userID)
-		if err != nil {
-			c.WriteMessage(websocket.CloseMessage, []byte("Invalid user ID"))
-			c.Close()
-			return
-		}
-
-		archUUID, err := uuid.Parse(architectureID)
-		if err != nil {
-			c.WriteMessage(websocket.CloseMessage, []byte("Invalid architecture ID"))
-			c.Close()
-			return
-		}
-
-		// Get architecture to check if it's a scenario architecture
-		ctx := context.Background()
-		arch, err := h.repo.GetArchitectureByID(ctx, archUUID, userUUID)
-		if err != nil {
-			c.WriteMessage(websocket.CloseMessage, []byte("Architecture not found or access denied"))
-			c.Close()
-			return
-		}
-
-		// Get user to check subscription tier
-		user, err := h.repo.GetUserByID(userID)
-		if err != nil {
-			c.WriteMessage(websocket.CloseMessage, []byte("Failed to verify user permissions"))
-			c.Close()
-			return
-		}
-
-		// Check if user can access collaboration for this architecture
-		isScenarioArchitecture := arch.ScenarioID != nil
-		if !user.CanAccessCollaboration(isScenarioArchitecture) {
-			c.WriteMessage(websocket.CloseMessage, []byte("Collaboration not available. Free users cannot collaborate on scenario architectures. Upgrade to Premium."))
-			c.Close()
-			return
-		}
+	if userName == "" {
+		userName = "Guest"
 	}
 
-	// Serve WebSocket connection
-	ws.ServeWS(h.hub, c, sessionID, userID, userName)
+	log.Printf("🔌 WebSocket connection established: user=%s (%s), session=%s", userID, userName, sessionID)
+
+	// Create client
+	client := &ws.Client{
+		ID:        userID,
+		UserName:  userName,
+		Conn:      &ws.WebSocketConn{Conn: c},
+		SessionID: sessionID,
+		LastSeen:  time.Now(),
+		IsIdle:    false,
+	}
+
+	// Register client with hub
+	h.hub.RegisterClient(client)
+	defer h.hub.UnregisterClient(client)
+
+	// Read messages from client
+	for {
+		messageType, data, err := c.ReadMessage()
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Printf("⚠️  WebSocket error for user %s: %v", userID, err)
+			} else {
+				log.Printf("🔌 WebSocket closed for user %s (%s)", userID, userName)
+			}
+			break
+		}
+
+		// Only handle text messages
+		if messageType != websocket.TextMessage {
+			continue
+		}
+
+		// Parse message
+		var msg ws.Message
+		if err := json.Unmarshal(data, &msg); err != nil {
+			log.Printf("❌ Failed to parse message from user %s: %v", userID, err)
+			continue
+		}
+
+		// Add metadata
+		msg.SessionID = sessionID
+		msg.UserID = userID
+		msg.UserName = userName
+		msg.Timestamp = time.Now().UnixMilli()
+
+		// Update client last seen
+		client.LastSeen = time.Now()
+
+		log.Printf("📨 Received %s from user %s in session %s", msg.Type, userID, sessionID)
+
+		// Handle message based on type
+		switch msg.Type {
+		case "request_state":
+			// Client is requesting current state
+			// The hub will automatically send full_state on registration
+			log.Printf("📥 Client %s requested state refresh", userID)
+
+		case "node_update", "edge_update", "cursor_move", "lock", "unlock", "session_end":
+			// Broadcast to other clients
+			h.hub.BroadcastMessage(&msg)
+
+		default:
+			log.Printf("⚠️  Unknown message type: %s from user %s", msg.Type, userID)
+		}
+	}
 }
 
-// GetSessionInfo returns information about active sessions
+// GetSessionInfo returns information about a collaboration session
 func (h *CollaborationHandler) GetSessionInfo(c *fiber.Ctx) error {
 	sessionID := c.Params("sessionId")
+	if sessionID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "sessionId is required",
+		})
+	}
 
-	// TODO: Implement session info retrieval
-	return c.JSON(fiber.Map{
-		"sessionId": sessionID,
-		"message":   "Session info endpoint",
-	})
+	sessionInfo := h.hub.GetSessionInfo(sessionID)
+	return c.JSON(sessionInfo)
 }

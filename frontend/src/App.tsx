@@ -8,15 +8,14 @@ import { RegisterForm } from "./components/auth/RegisterForm";
 import { Header } from "./components/layout/Header";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { Builder } from "./pages/Builder";
-import { Dashboard } from "./pages/Dashboard";
 import { Home } from "./pages/Home";
 import { NotFound } from "./pages/NotFound";
 import { Profile } from "./pages/Profile";
 import { ScenarioDetail } from "./pages/ScenarioDetail";
 import { Scenarios } from "./pages/Scenarios";
 import { Subscription } from "./pages/Subscription";
-import { SubscriptionSuccess } from "./pages/SubscriptionSuccess";
 import { SubscriptionCancel } from "./pages/SubscriptionCancel";
+import { SubscriptionSuccess } from "./pages/SubscriptionSuccess";
 import { useAuthStore } from "./store/authStore";
 function App() {
   const { fetchProfile, isAuthenticated, isLoading } = useAuthStore();
@@ -68,20 +67,14 @@ function App() {
           <Route path="/signup" element={<RegisterForm />} />
           <Route path="/forgot-password" element={<PasswordResetRequest />} />
           <Route path="/canvas" element={<Builder />} />
+          <Route path="/canvas/room/:roomId" element={<Builder />} />
           <Route path="/scenarios" element={<Scenarios />} />
           <Route path="/scenarios/:id" element={<ScenarioDetail />} />
           <Route path="/builder" element={<Builder />} />
           <Route path="/builder/:scenarioId" element={<Builder />} />
 
           {/* Protected routes */}
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            }
-          />
+
           <Route
             path="/profile"
             element={
@@ -102,26 +95,7 @@ function App() {
           <Route path="/subscription/cancel" element={<SubscriptionCancel />} />
 
           {/* Pro features route */}
-          <Route
-            path="/pro"
-            element={
-              <ProtectedRoute requiredRole="pro">
-                <div className="min-h-screen bg-gray-50 py-8">
-                  <div className="max-w-7xl mx-auto px-4">
-                    <h1 className="text-3xl font-bold mb-4">Pro Features</h1>
-                    <div className="card">
-                      <p>Pro features coming soon...</p>
-                      <ul className="mt-4 space-y-2">
-                        <li>✓ Sandbox Mode</li>
-                        <li>✓ Failure Injection</li>
-                        <li>✓ Advanced Visualizations</li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              </ProtectedRoute>
-            }
-          />
+
 
           {/* Admin route */}
           <Route

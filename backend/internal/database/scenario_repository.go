@@ -11,7 +11,7 @@ import (
 // GetAllScenarios retrieves all active scenarios
 func (r *Repository) GetAllScenarios() ([]*models.Scenario, error) {
 	query := `
-		SELECT id, title, description, category, difficulty, estimated_time, thumbnail_url,
+		SELECT id, title, description, category, difficulty, thumbnail_url,
 		       requirements, hints, goals, tier, is_active, created_at, updated_at
 		FROM scenarios
 		WHERE is_active = true
@@ -32,7 +32,6 @@ func (r *Repository) GetAllScenarios() ([]*models.Scenario, error) {
 			&scenario.Description,
 			&scenario.Category,
 			&scenario.Difficulty,
-			&scenario.EstimatedTime,
 			&scenario.ThumbnailURL,
 			&scenario.Requirements,
 			&scenario.Hints,
@@ -52,7 +51,7 @@ func (r *Repository) GetAllScenarios() ([]*models.Scenario, error) {
 }
 
 // GetScenariosPaginated retrieves scenarios with cursor-based pagination
-func (r *Repository) GetScenariosPaginated(cursor string, limit int, category, difficulty, tier, search string) ([]*models.Scenario, string, bool, error) {
+func (r *Repository) GetScenariosPaginated(userRole, cursor string, limit int, category, difficulty, tier, search string) ([]*models.Scenario, string, bool, error) {
 	var conditions []string
 	var args []interface{}
 	argCount := 1
@@ -79,10 +78,24 @@ func (r *Repository) GetScenariosPaginated(cursor string, limit int, category, d
 		argCount++
 	}
 
-	if tier != "" {
-		conditions = append(conditions, fmt.Sprintf("tier = $%d", argCount))
-		args = append(args, tier)
-		argCount++
+	// User subscription tier filtering logic
+	switch userRole {
+	case "free":
+		conditions = append(conditions, "tier = 'free'")
+	case "premium":
+		// Premium can see all, but if they filter by tier, apply it
+		if tier != "" {
+			conditions = append(conditions, fmt.Sprintf("tier = $%d", argCount))
+			args = append(args, tier)
+			argCount++
+		}
+	default:
+		// Admin/Other: Standard filtering
+		if tier != "" {
+			conditions = append(conditions, fmt.Sprintf("tier = $%d", argCount))
+			args = append(args, tier)
+			argCount++
+		}
 	}
 
 	if search != "" {
@@ -93,7 +106,7 @@ func (r *Repository) GetScenariosPaginated(cursor string, limit int, category, d
 
 	// Fetch limit + 1 to check if there are more results
 	query := fmt.Sprintf(`
-		SELECT id, title, description, category, difficulty, estimated_time, thumbnail_url,
+		SELECT id, title, description, category, difficulty, thumbnail_url,
 		       requirements, hints, goals, tier, is_active, created_at, updated_at
 		FROM scenarios
 		WHERE %s
@@ -118,7 +131,6 @@ func (r *Repository) GetScenariosPaginated(cursor string, limit int, category, d
 			&scenario.Description,
 			&scenario.Category,
 			&scenario.Difficulty,
-			&scenario.EstimatedTime,
 			&scenario.ThumbnailURL,
 			&scenario.Requirements,
 			&scenario.Hints,
@@ -150,7 +162,7 @@ func (r *Repository) GetScenariosPaginated(cursor string, limit int, category, d
 }
 
 // GetUserScenariosWithProgressPaginated gets scenarios with user progress using cursor pagination
-func (r *Repository) GetUserScenariosWithProgressPaginated(userID, cursor string, limit int, category, difficulty, tier, search string) ([]*models.ScenarioWithProgress, string, bool, error) {
+func (r *Repository) GetUserScenariosWithProgressPaginated(userID, userRole, cursor string, limit int, category, difficulty, tier, search string) ([]*models.ScenarioWithProgress, string, bool, error) {
 	var conditions []string
 	var args []interface{}
 	argCount := 2 // Start at 2 because $1 is userID
@@ -178,11 +190,36 @@ func (r *Repository) GetUserScenariosWithProgressPaginated(userID, cursor string
 		argCount++
 	}
 
-	if tier != "" {
-		conditions = append(conditions, fmt.Sprintf("s.tier = $%d", argCount))
-		args = append(args, tier)
-		argCount++
+	// User subscription tier filtering logic
+	// If userRole (passed as tier here from handler) is "free", force filter to "free" scenarios only
+	// regardless of what the user requested filter is.
+	// If user is premium/admin, they can filter by tier if they want, or see all if tier is empty.
+
+	switch tier {
+	case "free":
+		// Logic handles implicit request or explicit free user restriction
+		conditions = append(conditions, "s.tier = 'free'")
+	case "premium":
+		// If user asks for premium specifically
+		conditions = append(conditions, "s.tier = 'premium'")
 	}
+
+	// BUT, we must enforce subscription limits first:
+	// The `tier` argument essentially comes from the query param `?tier=...`.
+	// The `GetUserScenariosPaginated` handler currently doesn't pass the USER'S actual subscription tier to this function,
+	// it only passes the query param. This is a problem.
+	// We need to change the function signature or logic to accept userSubscriptionTier.
+
+	// Wait, looking at the previous handlers, `GetUserScenariosWithProgressPaginated` is called from `GetUserScenariosPaginated`
+	// In `GetUserScenariosPaginated` (handler), we extracted `subscriptionTier` from locals, but we didn't pass it to `GetUserScenariosWithProgressPaginated`.
+	// We only passed `tier := c.Query("tier", "")`.
+
+	// I need to:
+	// 1. Update `GetUserScenariosWithProgressPaginated` signature to accept `userSubscriptionTier`.
+	// 2. Update the handler to pass it.
+	// 3. Implement the logic here.
+
+	// Let's abort this specific tool call and do it properly with multiple steps or a better plan.
 
 	if search != "" {
 		conditions = append(conditions, fmt.Sprintf("(s.title ILIKE $%d OR s.description ILIKE $%d)", argCount, argCount))
@@ -191,7 +228,7 @@ func (r *Repository) GetUserScenariosWithProgressPaginated(userID, cursor string
 	}
 
 	query := fmt.Sprintf(`
-		SELECT s.id, s.title, s.description, s.category, s.difficulty, s.estimated_time, 
+		SELECT s.id, s.title, s.description, s.category, s.difficulty, 
 		       s.thumbnail_url, s.requirements, s.hints, s.goals, s.tier, s.is_active, s.created_at, s.updated_at,
 		       COALESCE(p.status, 'not_started') as status,
 		       COALESCE(p.steps_completed, 0) as steps_completed,
@@ -220,7 +257,6 @@ func (r *Repository) GetUserScenariosWithProgressPaginated(userID, cursor string
 			&swp.Description,
 			&swp.Category,
 			&swp.Difficulty,
-			&swp.EstimatedTime,
 			&swp.ThumbnailURL,
 			&swp.Requirements,
 			&swp.Hints,
@@ -258,7 +294,7 @@ func (r *Repository) GetUserScenariosWithProgressPaginated(userID, cursor string
 func (r *Repository) GetScenarioByID(id string) (*models.Scenario, error) {
 	scenario := &models.Scenario{}
 	query := `
-		SELECT id, title, description, category, difficulty, estimated_time, thumbnail_url,
+		SELECT id, title, description, category, difficulty, thumbnail_url,
 		       requirements, hints, goals, tier, is_active, created_at, updated_at
 		FROM scenarios
 		WHERE id = $1 AND is_active = true
@@ -269,7 +305,6 @@ func (r *Repository) GetScenarioByID(id string) (*models.Scenario, error) {
 		&scenario.Description,
 		&scenario.Category,
 		&scenario.Difficulty,
-		&scenario.EstimatedTime,
 		&scenario.ThumbnailURL,
 		&scenario.Requirements,
 		&scenario.Hints,
@@ -317,7 +352,7 @@ func (r *Repository) SearchScenarios(category, difficulty, search string) ([]*mo
 	}
 
 	query := fmt.Sprintf(`
-		SELECT id, title, description, category, difficulty, estimated_time, thumbnail_url,
+		SELECT id, title, description, category, difficulty, thumbnail_url,
 		       requirements, hints, goals, tier, is_active, created_at, updated_at
 		FROM scenarios
 		WHERE %s
@@ -339,7 +374,6 @@ func (r *Repository) SearchScenarios(category, difficulty, search string) ([]*mo
 			&scenario.Description,
 			&scenario.Category,
 			&scenario.Difficulty,
-			&scenario.EstimatedTime,
 			&scenario.ThumbnailURL,
 			&scenario.Requirements,
 			&scenario.Hints,
@@ -387,9 +421,9 @@ func (r *Repository) GetScenarioCategories() ([]string, error) {
 // CreateScenario creates a new scenario (admin only)
 func (r *Repository) CreateScenario(scenario *models.Scenario) error {
 	query := `
-		INSERT INTO scenarios (id, title, description, category, difficulty, estimated_time, 
+		INSERT INTO scenarios (id, title, description, category, difficulty, 
 		                       thumbnail_url, requirements, hints, goals, tier, is_active)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING created_at, updated_at
 	`
 	err := r.db.QueryRow(
@@ -399,7 +433,6 @@ func (r *Repository) CreateScenario(scenario *models.Scenario) error {
 		scenario.Description,
 		scenario.Category,
 		scenario.Difficulty,
-		scenario.EstimatedTime,
 		scenario.ThumbnailURL,
 		scenario.Requirements,
 		scenario.Hints,
@@ -529,7 +562,7 @@ func (r *Repository) CreateOrUpdateUserScenarioProgress(progress *models.UserSce
 // GetUserScenariosWithProgress gets all scenarios with user progress
 func (r *Repository) GetUserScenariosWithProgress(userID string) ([]*models.ScenarioWithProgress, error) {
 	query := `
-		SELECT s.id, s.title, s.description, s.category, s.difficulty, s.estimated_time, 
+		SELECT s.id, s.title, s.description, s.category, s.difficulty, 
 		       s.thumbnail_url, s.requirements, s.hints, s.goals, s.tier, s.is_active, s.created_at, s.updated_at,
 		       COALESCE(p.status, 'not_started') as status,
 		       COALESCE(p.steps_completed, 0) as steps_completed,
@@ -554,7 +587,6 @@ func (r *Repository) GetUserScenariosWithProgress(userID string) ([]*models.Scen
 			&swp.Description,
 			&swp.Category,
 			&swp.Difficulty,
-			&swp.EstimatedTime,
 			&swp.ThumbnailURL,
 			&swp.Requirements,
 			&swp.Hints,
@@ -591,7 +623,7 @@ func (r *Repository) GetScenariosForUserRole(userRole string) ([]*models.Scenari
 	if userRole == "free" {
 		// Free users only see free tier scenarios
 		query = `
-			SELECT id, title, description, category, difficulty, estimated_time, thumbnail_url,
+			SELECT id, title, description, category, difficulty, thumbnail_url,
 			       requirements, hints, goals, tier, is_active, created_at, updated_at
 			FROM scenarios
 			WHERE is_active = true AND tier = 'free'
@@ -600,7 +632,7 @@ func (r *Repository) GetScenariosForUserRole(userRole string) ([]*models.Scenari
 	} else {
 		// Premium and admin users see all scenarios
 		query = `
-			SELECT id, title, description, category, difficulty, estimated_time, thumbnail_url,
+			SELECT id, title, description, category, difficulty, thumbnail_url,
 			       requirements, hints, goals, tier, is_active, created_at, updated_at
 			FROM scenarios
 			WHERE is_active = true
@@ -623,7 +655,6 @@ func (r *Repository) GetScenariosForUserRole(userRole string) ([]*models.Scenari
 			&scenario.Description,
 			&scenario.Category,
 			&scenario.Difficulty,
-			&scenario.EstimatedTime,
 			&scenario.ThumbnailURL,
 			&scenario.Requirements,
 			&scenario.Hints,
@@ -649,7 +680,7 @@ func (r *Repository) GetUserScenariosWithProgressForRole(userID, userRole string
 	if userRole == "free" {
 		// Free users only see free tier scenarios
 		query = `
-			SELECT s.id, s.title, s.description, s.category, s.difficulty, s.estimated_time, 
+			SELECT s.id, s.title, s.description, s.category, s.difficulty, 
 			       s.thumbnail_url, s.requirements, s.hints, s.goals, s.tier, s.is_active, s.created_at, s.updated_at,
 			       COALESCE(p.status, 'not_started') as status,
 			       COALESCE(p.steps_completed, 0) as steps_completed,
@@ -662,7 +693,7 @@ func (r *Repository) GetUserScenariosWithProgressForRole(userID, userRole string
 	} else {
 		// Premium and admin users see all scenarios
 		query = `
-			SELECT s.id, s.title, s.description, s.category, s.difficulty, s.estimated_time, 
+			SELECT s.id, s.title, s.description, s.category, s.difficulty, 
 			       s.thumbnail_url, s.requirements, s.hints, s.goals, s.tier, s.is_active, s.created_at, s.updated_at,
 			       COALESCE(p.status, 'not_started') as status,
 			       COALESCE(p.steps_completed, 0) as steps_completed,
@@ -689,7 +720,6 @@ func (r *Repository) GetUserScenariosWithProgressForRole(userID, userRole string
 			&swp.Description,
 			&swp.Category,
 			&swp.Difficulty,
-			&swp.EstimatedTime,
 			&swp.ThumbnailURL,
 			&swp.Requirements,
 			&swp.Hints,

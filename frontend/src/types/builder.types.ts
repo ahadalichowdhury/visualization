@@ -89,11 +89,26 @@ export interface NodeData {
   label: string;
   config: NodeConfig;
   nodeType?: string; // Store the node type for validation
+  version?: number; // Version number for conflict resolution (Excalidraw-style)
+  isDeleted?: boolean; // Tombstoning flag for soft deletes (Excalidraw-style)
+  lastModifiedBy?: string; // User ID who last modified this node
+  lastModifiedAt?: number; // Timestamp of last modification
 }
 
-// Custom node and edge types
-export type BuilderNode = Node<NodeData>;
-export type BuilderEdge = Edge;
+// Custom node and edge types with collaboration metadata
+export type BuilderNode = Node<NodeData> & {
+  version?: number; // Version at node level for React Flow compatibility
+  isDeleted?: boolean; // Tombstoning flag at node level
+  lastModifiedBy?: string; // User ID who last modified
+  lastModifiedAt?: number; // Timestamp of last modification
+};
+
+export type BuilderEdge = Edge & {
+  version?: number; // Version number for conflict resolution
+  isDeleted?: boolean; // Tombstoning flag for soft deletes
+  lastModifiedBy?: string; // User ID who last modified this edge
+  lastModifiedAt?: number; // Timestamp of last modification
+};
 
 // Node type definition
 export interface NodeTypeDefinition {

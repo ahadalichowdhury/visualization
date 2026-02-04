@@ -63,9 +63,7 @@ export const ScenarioInfoPanel = ({
               >
                 {scenario.difficulty}
               </span>
-              <span className="bg-white dark:bg-white/20 px-3 py-1 rounded-full">
-                {scenario.estimated_time} min
-              </span>
+
             </div>
           </div>
 
