@@ -29,9 +29,25 @@ api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
     if (error.response?.status === 401) {
-      // Token expired or invalid
+      // Token expired or invalid - clear all auth data
       localStorage.removeItem("auth_token");
-      window.location.href = "/login";
+      localStorage.removeItem("auth-storage");
+      
+      // Only redirect if not already on login/signup/public pages
+      const publicPaths = ['/login', '/signup', '/forgot-password', '/reset-password', '/'];
+      const currentPath = window.location.pathname;
+      
+      if (!publicPaths.includes(currentPath) && !currentPath.startsWith('/scenarios')) {
+        // Show user-friendly message
+        const message = "Your session has expired. Please login again.";
+        
+        // Store the message to show on login page
+        sessionStorage.setItem('auth_redirect_message', message);
+        
+        // Redirect to login with return URL
+        const returnUrl = encodeURIComponent(currentPath);
+        window.location.href = `/login?returnUrl=${returnUrl}`;
+      }
     }
     return Promise.reject(error);
   },

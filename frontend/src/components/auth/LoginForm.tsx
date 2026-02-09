@@ -1,11 +1,12 @@
-import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "../../store/authStore";
 import { Button } from "../common/Button";
 import { Input } from "../common/Input";
 
 export const LoginForm: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login, isLoading, error, clearError } = useAuthStore();
 
   const [formData, setFormData] = useState({
@@ -14,6 +15,21 @@ export const LoginForm: React.FC = () => {
   });
 
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [sessionExpiredMessage, setSessionExpiredMessage] = useState<string | null>(null);
+
+  // Check for session expired message
+  useEffect(() => {
+    const message = sessionStorage.getItem('auth_redirect_message');
+    if (message) {
+      setSessionExpiredMessage(message);
+      sessionStorage.removeItem('auth_redirect_message');
+      
+      // Auto-clear message after 5 seconds
+      setTimeout(() => {
+        setSessionExpiredMessage(null);
+      }, 5000);
+    }
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -50,7 +66,11 @@ export const LoginForm: React.FC = () => {
 
     try {
       await login(formData);
-      navigate("/scenarios");
+      
+      // Redirect to return URL if available, otherwise go to scenarios
+      const searchParams = new URLSearchParams(location.search);
+      const returnUrl = searchParams.get('returnUrl');
+      navigate(returnUrl || "/scenarios");
     } catch (err) {
       // Error is handled by store
     }
@@ -78,6 +98,39 @@ export const LoginForm: React.FC = () => {
           className="mt-6 sm:mt-8 space-y-4 sm:space-y-6 bg-white dark:bg-[#252526] p-6 sm:p-8 rounded-xl shadow-2xl border border-gray-200 dark:border-[#3e3e3e]"
           onSubmit={handleSubmit}
         >
+          {/* Session expired warning */}
+          {sessionExpiredMessage && (
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 flex items-start space-x-3">
+              <svg 
+                className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" 
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round" 
+                  strokeWidth={2} 
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" 
+                />
+              </svg>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                  {sessionExpiredMessage}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSessionExpiredMessage(null)}
+                className="text-yellow-600 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          )}
+          
           {error && (
             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-3 sm:px-4 py-3 rounded-lg text-sm sm:text-base">
               {error}

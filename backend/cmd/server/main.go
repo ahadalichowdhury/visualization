@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 
 	"github.com/gofiber/fiber/v2"
@@ -15,6 +16,7 @@ import (
 	"github.com/yourusername/visualization-backend/internal/auth"
 	"github.com/yourusername/visualization-backend/internal/config"
 	"github.com/yourusername/visualization-backend/internal/database"
+	"github.com/yourusername/visualization-backend/internal/email"
 	stripeService "github.com/yourusername/visualization-backend/internal/stripe"
 )
 
@@ -48,6 +50,24 @@ func main() {
 
 	// Initialize Stripe service
 	stripeService := stripeService.NewService(cfg.Stripe.SecretKey)
+
+	// Initialize Email service
+	smtpPort, err := strconv.Atoi(cfg.Email.Port)
+	if err != nil {
+		log.Printf("Warning: Invalid SMTP port '%s', using default 587", cfg.Email.Port)
+		smtpPort = 587
+	}
+	emailService := email.NewService(
+		cfg.Email.Host,
+		smtpPort,
+		cfg.Email.Username,
+		cfg.Email.Password,
+		cfg.Email.From,
+		cfg.Email.FromName,
+		cfg.Email.FrontendURL,
+	)
+
+	log.Println("Email service initialized")
 
 	// Create Fiber app
 	app := fiber.New(fiber.Config{
@@ -87,7 +107,7 @@ func main() {
 	})
 
 	// Setup routes
-	routes.Setup(app, repo, jwtService, stripeService, cfg)
+	routes.Setup(app, repo, jwtService, stripeService, emailService, cfg)
 
 	// Setup WebSocket hub (future)
 	// wsHub := websocket.NewHub()

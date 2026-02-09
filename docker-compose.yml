@@ -59,6 +59,13 @@ services:
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
       - STRIPE_WEBHOOK_SECRET=whsec_NGaDpTRGQtWPa35v6geedC23oFAMvihX
       - FRONTEND_URL=http://localhost:3000
+      # Email/SMTP Configuration (Gmail)
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_FROM=${SMTP_FROM:-noreply@yourdomain.com}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME:-Visualization Platform}
     depends_on:
       postgres:
         condition: service_healthy

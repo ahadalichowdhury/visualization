@@ -45,6 +45,15 @@ func (e *Engine) Run() (*SimulationOutput, error) {
 		currentRPS := e.generateWorkload(tick)
 		e.state.CurrentWorkloadRPS = currentRPS
 
+		// Reset transient state for all nodes (failures are re-applied each tick)
+		for _, node := range e.state.NodeStates {
+			node.Failed = false
+			// Restore base latency (remove previous network delays)
+			// processNodeWithTraffic will add current delays back
+			// We don't need to manually reset LatencyMS here because processNodeWithTraffic
+			// overwrites it starting from BaseLatencyMS.
+		}
+
 		// Apply failure injections
 		e.applyFailures(tick)
 
@@ -149,9 +158,11 @@ func (e *Engine) InitializeState() error {
 			ReadRatio:     getInt(node.Data.Config, "readRatio", 80), // Default 80% reads
 		}
 
-		// Adjust cache hit rate for cache nodes
+		// Adjust cache hit rate for cache nodes and CDNs
 		if state.Type == "cache_redis" || state.Type == "cache_memcached" {
 			state.CacheHitRate = 0.80
+		} else if state.Type == "cdn" || state.Type == "cdn_cloudfront" {
+			state.CacheHitRate = 0.90 // CDNs have high hit rates for static content
 		}
 
 		e.state.NodeStates[node.ID] = state
@@ -296,13 +307,13 @@ func (e *Engine) calculateNodeOutgoing(node *NodeState, incomingRPS float64) flo
 
 	outgoingRPS := incomingRPS
 
-	// EXCEPTION 1: Cache reduces downstream traffic (only misses pass through)
-	if node.Type == "cache_redis" || node.Type == "cache_memcached" {
+	// EXCEPTION 1: Cache/CDN reduces downstream traffic (only misses pass through)
+	if node.Type == "cache_redis" || node.Type == "cache_memcached" || node.Type == "cdn" || node.Type == "cdn_cloudfront" {
 		cacheHitRate := node.CacheHitRate
 		if cacheHitRate < 0 {
 			cacheHitRate = 0.75 // Default 75% hit rate
 		}
-		// Only cache misses go to downstream database
+		// Only cache misses go to downstream database/origin
 		outgoingRPS = incomingRPS * (1.0 - cacheHitRate)
 	}
 
@@ -367,8 +378,8 @@ func (e *Engine) processNodeWithTraffic(nodeID string, incomingRPS float64) {
 	// Update outgoing RPS
 	outgoingRPS := throughput
 
-	// Apply cache logic
-	if node.Type == "cache_redis" || node.Type == "cache_memcached" {
+	// Apply cache/CDN logic
+	if node.Type == "cache_redis" || node.Type == "cache_memcached" || node.Type == "cdn" || node.Type == "cdn_cloudfront" {
 		cacheHitRate := node.CacheHitRate
 		if cacheHitRate < 0 {
 			cacheHitRate = 0.75
@@ -386,8 +397,15 @@ func (e *Engine) processNodeWithTraffic(nodeID string, incomingRPS float64) {
 	node.CPUUsage = resources.CPUPercent
 	node.MemoryUsage = resources.MemoryPercent
 
+	// Capture any injected latency from failures (applied before this function)
+	// applyNetworkDelay adds to node.LatencyMS, so we extract the delta here
+	injectedLatency := 0.0
+	if node.LatencyMS > node.BaseLatencyMS {
+		injectedLatency = node.LatencyMS - node.BaseLatencyMS
+	}
+
 	// Calculate realistic latency based on load and queueing
-	// CRITICAL FIX: Use BaseLatencyMS (original) NOT node.LatencyMS (which changes each tick!)
+	// Use BaseLatencyMS (original hardware speed) for service time calculations
 	baseLatency := node.BaseLatencyMS
 
 	// REAL-WORLD: Add cross-region network latency
@@ -421,12 +439,12 @@ func (e *Engine) processNodeWithTraffic(nodeID string, incomingRPS float64) {
 		calculatedLatency := baseLatency + queueingDelay
 
 		// CRITICAL: Cap latency at 30 seconds (real systems timeout!)
-		node.LatencyMS = math.Min(calculatedLatency+crossRegionLatency, 30000.0)
+		node.LatencyMS = math.Min(calculatedLatency+crossRegionLatency+injectedLatency, 30000.0)
 
 		// Record high latency for percentile calculation
 		e.state.LatencyHistory = append(e.state.LatencyHistory, node.LatencyMS)
 	} else {
-		node.LatencyMS = baseLatency + crossRegionLatency
+		node.LatencyMS = baseLatency + crossRegionLatency + injectedLatency
 		e.state.LatencyHistory = append(e.state.LatencyHistory, node.LatencyMS)
 	}
 
@@ -854,7 +872,7 @@ func calculateHardwarePerformance(nodeType string, config map[string]interface{}
 		capacityRPS = 1000000.0
 		latencyMS = 0.0
 
-	case "load_balancer":
+	case "load_balancer", "api_gateway", "reverse_proxy":
 		// Load balancer capacity from lbType
 		lbType := getString(config, "lbType", "alb")
 

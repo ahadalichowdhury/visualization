@@ -28,19 +28,34 @@ export const PasswordResetRequest: React.FC = () => {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-[#1a1a2e] dark:via-[#16213e] dark:to-[#0f1419] py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full">
-          <div className="bg-green-50 border border-green-200 rounded-lg p-6">
-            <h3 className="text-lg font-medium text-green-900 mb-2">
+          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-6 shadow-lg">
+            <div className="flex items-center justify-center w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-full mx-auto mb-4">
+              <svg
+                className="w-6 h-6 text-green-600 dark:text-green-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-green-900 dark:text-green-100 mb-2 text-center">
               Check your email
             </h3>
-            <p className="text-green-700">
+            <p className="text-green-700 dark:text-green-300 text-center text-sm sm:text-base">
               If an account exists with that email, we've sent password reset
               instructions.
             </p>
             <Link
               to="/login"
-              className="mt-4 inline-block text-primary-600 hover:text-primary-500"
+              className="mt-6 block text-center px-4 py-2 bg-green-600 dark:bg-green-700 hover:bg-green-700 dark:hover:bg-green-600 text-white rounded-lg font-medium transition-colors"
             >
               Return to login
             </Link>
@@ -51,20 +66,23 @@ export const PasswordResetRequest: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4">
-      <div className="max-w-md w-full space-y-8">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-[#1a1a2e] dark:via-[#16213e] dark:to-[#0f1419] py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-6 sm:space-y-8">
         <div>
-          <h2 className="text-3xl font-extrabold text-gray-900 dark:text-[#cccccc]">
+          <h2 className="mt-4 sm:mt-6 text-center text-3xl sm:text-4xl font-extrabold text-gray-900 dark:text-white">
             Reset your password
           </h2>
-          <p className="mt-2 text-sm text-gray-600 dark:text-[#9ca3af]">
+          <p className="mt-2 sm:mt-3 text-center text-xs sm:text-sm text-gray-600 dark:text-gray-400">
             Enter your email address and we'll send you a reset link.
           </p>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form
+          onSubmit={handleSubmit}
+          className="mt-6 sm:mt-8 space-y-4 sm:space-y-6 bg-white dark:bg-[#252526] p-6 sm:p-8 rounded-xl shadow-2xl border border-gray-200 dark:border-[#3e3e3e]"
+        >
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-3 sm:px-4 py-3 rounded-lg text-sm sm:text-base">
               {error}
             </div>
           )}
@@ -82,7 +100,7 @@ export const PasswordResetRequest: React.FC = () => {
             type="submit"
             variant="primary"
             isLoading={isLoading}
-            className="w-full"
+            className="w-full text-base sm:text-lg py-3"
           >
             Send reset link
           </Button>
@@ -90,7 +108,7 @@ export const PasswordResetRequest: React.FC = () => {
           <div className="text-center mt-4">
             <Link
               to="/login"
-              className="text-sm text-primary-600 hover:text-primary-500"
+              className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300"
             >
               Back to login
             </Link>
@@ -142,18 +160,33 @@ export const PasswordResetConfirm: React.FC<PasswordResetConfirmProps> = ({
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-[#1a1a2e] dark:via-[#16213e] dark:to-[#0f1419] py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full">
-          <div className="bg-green-50 border border-green-200 rounded-lg p-6">
-            <h3 className="text-lg font-medium text-green-900 mb-2">
+          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-6 shadow-lg">
+            <div className="flex items-center justify-center w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-full mx-auto mb-4">
+              <svg
+                className="w-6 h-6 text-green-600 dark:text-green-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-green-900 dark:text-green-100 mb-2 text-center">
               Password reset successful
             </h3>
-            <p className="text-green-700">
+            <p className="text-green-700 dark:text-green-300 text-center text-sm sm:text-base">
               You can now login with your new password.
             </p>
             <Link
               to="/login"
-              className="mt-4 inline-block text-primary-600 hover:text-primary-500"
+              className="mt-6 block text-center px-4 py-2 bg-green-600 dark:bg-green-700 hover:bg-green-700 dark:hover:bg-green-600 text-white rounded-lg font-medium transition-colors"
             >
               Go to login
             </Link>
@@ -164,20 +197,23 @@ export const PasswordResetConfirm: React.FC<PasswordResetConfirmProps> = ({
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4">
-      <div className="max-w-md w-full space-y-8">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-[#1a1a2e] dark:via-[#16213e] dark:to-[#0f1419] py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-6 sm:space-y-8">
         <div>
-          <h2 className="text-3xl font-extrabold text-gray-900 dark:text-[#cccccc]">
+          <h2 className="mt-4 sm:mt-6 text-center text-3xl sm:text-4xl font-extrabold text-gray-900 dark:text-white">
             Set new password
           </h2>
-          <p className="mt-2 text-sm text-gray-600 dark:text-[#9ca3af]">
+          <p className="mt-2 sm:mt-3 text-center text-xs sm:text-sm text-gray-600 dark:text-gray-400">
             Enter your new password below.
           </p>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form
+          onSubmit={handleSubmit}
+          className="mt-6 sm:mt-8 space-y-4 sm:space-y-6 bg-white dark:bg-[#252526] p-6 sm:p-8 rounded-xl shadow-2xl border border-gray-200 dark:border-[#3e3e3e]"
+        >
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-3 sm:px-4 py-3 rounded-lg text-sm sm:text-base">
               {error}
             </div>
           )}
@@ -204,7 +240,7 @@ export const PasswordResetConfirm: React.FC<PasswordResetConfirmProps> = ({
             type="submit"
             variant="primary"
             isLoading={isLoading}
-            className="w-full"
+            className="w-full text-base sm:text-lg py-3"
           >
             Reset password
           </Button>

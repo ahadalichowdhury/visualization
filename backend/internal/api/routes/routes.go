@@ -9,12 +9,13 @@ import (
 	"github.com/yourusername/visualization-backend/internal/catalog"
 	"github.com/yourusername/visualization-backend/internal/config"
 	"github.com/yourusername/visualization-backend/internal/database"
+	"github.com/yourusername/visualization-backend/internal/email"
 	stripeService "github.com/yourusername/visualization-backend/internal/stripe"
 	ws "github.com/yourusername/visualization-backend/internal/websocket"
 )
 
 // Setup configures all application routes
-func Setup(app *fiber.App, repo *database.Repository, jwtService *auth.JWTService, stripe *stripeService.Service, cfg *config.Config) {
+func Setup(app *fiber.App, repo *database.Repository, jwtService *auth.JWTService, stripe *stripeService.Service, emailService *email.Service, cfg *config.Config) {
 	// Initialize WebSocket hub
 	hub := ws.NewHub()
 	go hub.Run()
@@ -23,7 +24,7 @@ func Setup(app *fiber.App, repo *database.Repository, jwtService *auth.JWTServic
 	authService := auth.NewService(repo, jwtService)
 
 	// Initialize handlers
-	authHandler := handlers.NewAuthHandler(authService)
+	authHandler := handlers.NewAuthHandler(authService, emailService)
 	adminHandler := handlers.NewAdminHandler(repo)
 	scenarioHandler := handlers.NewScenarioHandler(repo)
 	architectureHandler := handlers.NewArchitectureHandler(repo)

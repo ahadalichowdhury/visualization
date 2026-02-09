@@ -93,6 +93,9 @@ export interface NodeData {
   isDeleted?: boolean; // Tombstoning flag for soft deletes (Excalidraw-style)
   lastModifiedBy?: string; // User ID who last modified this node
   lastModifiedAt?: number; // Timestamp of last modification
+  chaosFailure?: string; // Chaos engineering failure type
+  chaosSeverity?: number; // Chaos engineering severity (0-100)
+  chaosDuration?: number; // Chaos engineering duration (seconds)
 }
 
 // Custom node and edge types with collaboration metadata
@@ -889,34 +892,34 @@ export const CONNECTION_RULES: Record<string, string[]> = {
   // SRE FIX: NEW COMPONENTS - Modern Observability
   apm: ["monitoring", "logging", "database_timeseries"], // APM → Monitoring backend (Datadog/New Relic)
   sidecar_proxy: ["service_mesh", "monitoring", "logging", "apm"], // Envoy/Linkerd sidecar
-  
+
   // MEDIUM PRIORITY: Additional Observability
   rum: ["monitoring", "analytics_service", "apm"], // Frontend metrics → Backend
   synthetic_monitoring: ["monitoring", "notification", "logging"], // Automated checks → Alerts
-  
+
   // MEDIUM PRIORITY: Modern API Patterns
   graphql_gateway: ["api_server", "microservice", "database_sql", "database_nosql", "cache_redis", "auth_service", "monitoring", "logging"], // GraphQL → Services
   grpc_server: ["database_sql", "database_nosql", "cache_redis", "microservice", "queue", "monitoring", "logging"], // gRPC services
-  
+
   // LOW PRIORITY: Edge & Web3
   wasm_runtime: ["api_server", "database_sql", "cache_redis", "object_storage", "cdn", "monitoring"], // Edge compute
   blockchain_node: ["external_api", "queue", "database_sql", "monitoring", "logging"], // Blockchain integration
-  
+
   // PRIORITY 2: Serverless Functions
   lambda_function: ["database_sql", "database_nosql", "object_storage", "queue", "message_broker", "external_api", "secret_manager", "monitoring", "logging", "apm"],
   cloud_function: ["database_sql", "database_nosql", "object_storage", "queue", "message_broker", "external_api", "secret_manager", "monitoring", "logging", "apm"],
   azure_function: ["database_sql", "database_nosql", "object_storage", "queue", "message_broker", "external_api", "secret_manager", "monitoring", "logging", "apm"],
-  
+
   // PRIORITY 2: AI/ML Model Serving
   sagemaker_endpoint: ["object_storage", "database_sql", "cache_redis", "monitoring", "logging", "apm"], // Model artifacts from S3, predictions to DB
   vertex_ai_endpoint: ["object_storage", "database_sql", "cache_redis", "monitoring", "logging", "apm"], // Same pattern
   azure_ml_endpoint: ["object_storage", "database_sql", "cache_redis", "monitoring", "logging", "apm"], // Same pattern
-  
+
   // PRIORITY 2: Kubernetes Components
   k8s_pod: ["database_sql", "database_nosql", "cache_redis", "queue", "message_broker", "object_storage", "monitoring", "logging", "apm", "k8s_service"], // Pods connect to services
   k8s_service: ["k8s_pod", "load_balancer", "monitoring"], // Services route to pods
   k8s_ingress: ["k8s_service", "load_balancer", "monitoring", "logging"], // Ingress routes to services
-  
+
   // PRIORITY 2: Multi-cloud Equivalents
   azure_app_service: ["database_sql", "database_nosql", "azure_cosmos_db", "cache_redis", "queue", "azure_service_bus", "object_storage", "monitoring", "logging", "apm"],
   gcp_app_engine: ["database_sql", "database_nosql", "gcp_firestore", "cache_redis", "queue", "gcp_pub_sub", "object_storage", "monitoring", "logging", "apm"],
@@ -948,8 +951,8 @@ export const isValidConnection = (
 
   // SRE PRODUCTION FIX: Special validation for database → queue/broker connections
   // Only allow if CDC (Change Data Capture) is enabled
-  if ((sourceType === "database_sql" || sourceType === "database_nosql") && 
-      (targetType === "queue" || targetType === "message_broker")) {
+  if ((sourceType === "database_sql" || sourceType === "database_nosql") &&
+    (targetType === "queue" || targetType === "message_broker")) {
     // Allow if CDC is explicitly enabled, otherwise warn/block
     if (sourceConfig?.cdcEnabled === true) {
       return true;

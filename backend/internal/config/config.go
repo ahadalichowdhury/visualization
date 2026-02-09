@@ -13,6 +13,7 @@ type Config struct {
 	JWT      JWTConfig
 	CORS     CORSConfig
 	Stripe   StripeConfig
+	Email    EmailConfig
 }
 
 // ServerConfig holds server configuration
@@ -57,6 +58,17 @@ type StripeConfig struct {
 	FrontendURL   string
 }
 
+// EmailConfig holds email/SMTP configuration
+type EmailConfig struct {
+	Host        string
+	Port        string
+	Username    string
+	Password    string
+	From        string
+	FromName    string
+	FrontendURL string
+}
+
 // Load loads configuration from environment variables
 func Load() *Config {
 	// JWT expiry duration
@@ -97,6 +109,15 @@ func Load() *Config {
 			SecretKey:     getEnv("STRIPE_SECRET_KEY", ""),
 			WebhookSecret: getEnv("STRIPE_WEBHOOK_SECRET", ""),
 			FrontendURL:   getEnv("FRONTEND_URL", "http://localhost:3000"),
+		},
+		Email: EmailConfig{
+			Host:        getEnv("SMTP_HOST", "smtp.gmail.com"),
+			Port:        getEnv("SMTP_PORT", "587"),
+			Username:    getEnv("SMTP_USERNAME", ""),
+			Password:    getEnv("SMTP_PASSWORD", ""),
+			From:        getEnv("SMTP_FROM", "noreply@example.com"),
+			FromName:    getEnv("SMTP_FROM_NAME", "Visualization Platform"),
+			FrontendURL: getEnv("FRONTEND_URL", "http://localhost:3000"),
 		},
 	}
 }

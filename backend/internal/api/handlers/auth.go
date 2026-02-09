@@ -2,22 +2,26 @@ package handlers
 
 import (
 	"errors"
+	"log"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/yourusername/visualization-backend/internal/auth"
 	"github.com/yourusername/visualization-backend/internal/database"
+	"github.com/yourusername/visualization-backend/internal/email"
 )
 
 // AuthHandler handles authentication endpoints
 type AuthHandler struct {
-	authService *auth.Service
+	authService  *auth.Service
+	emailService *email.Service
 }
 
 // NewAuthHandler creates a new auth handler
-func NewAuthHandler(authService *auth.Service) *AuthHandler {
+func NewAuthHandler(authService *auth.Service, emailService *email.Service) *AuthHandler {
 	return &AuthHandler{
-		authService: authService,
+		authService:  authService,
+		emailService: emailService,
 	}
 }
 
@@ -104,19 +108,42 @@ func (h *AuthHandler) RequestPasswordReset(c *fiber.Ctx) error {
 
 	req.Email = strings.TrimSpace(req.Email)
 
-	token, err := h.authService.RequestPasswordReset(req.Email)
+	// Get user info for email
+	user, err := h.authService.GetUserByEmail(req.Email)
 	if err != nil {
-		// Log error but don't reveal to user
+		// Don't reveal if email exists - return success anyway for security
 		return c.JSON(fiber.Map{
 			"message": "If the email exists, a reset link has been sent",
 		})
 	}
 
-	// In production, send email with token
-	// For now, return token in response (ONLY FOR DEVELOPMENT)
+	token, err := h.authService.RequestPasswordReset(req.Email)
+	if err != nil {
+		// Log error but don't reveal to user
+		log.Printf("Failed to generate reset token for %s: %v", req.Email, err)
+		return c.JSON(fiber.Map{
+			"message": "If the email exists, a reset link has been sent",
+		})
+	}
+
+	// Send email with reset link
+	userName := ""
+	if user.Name != nil {
+		userName = *user.Name
+	}
+
+	if err := h.emailService.SendPasswordResetEmail(user.Email, userName, token); err != nil {
+		// Log error but don't reveal to user
+		log.Printf("Failed to send reset email to %s: %v", req.Email, err)
+		return c.JSON(fiber.Map{
+			"message": "If the email exists, a reset link has been sent",
+		})
+	}
+
+	log.Printf("Password reset email sent successfully to %s", req.Email)
+
 	return c.JSON(fiber.Map{
-		"message": "Password reset initiated",
-		"token":   token, // Remove this in production
+		"message": "If the email exists, a reset link has been sent",
 	})
 }
 

@@ -148,10 +148,44 @@ export const SimulationPanel = ({
         (e) => mainNodeIds.has(e.source) && mainNodeIds.has(e.target),
       );
 
+      // Generate failures from node chaos state (Bridge the Gap)
+      const chaosFailures: any[] = [];
+      mainNodes.forEach(node => {
+         if (node.data.chaosFailure) {
+            let type = 'nodeFail';
+            let delayMs = 0;
+
+            // Map frontend chaos types to backend failure types
+            switch (node.data.chaosFailure) {
+                case 'crash':
+                case 'partition':
+                case 'throttle': 
+                    type = 'nodeFail';
+                    break;
+                case 'latency':
+                    type = 'networkDelay'; // Maps to Region Delay in backend
+                    delayMs = (node.data.chaosSeverity || 50) * 20; // Severity 50 -> 1000ms delay
+                    break;
+            }
+
+            chaosFailures.push({
+                type,
+                nodeId: node.id,
+                region: node.data.config?.region || 'us-east',
+                delayMs,
+                startTick: 1, 
+                endTick: node.data.chaosDuration || workload.durationSeconds
+            });
+         }
+      });
+
       const output = await simulationService.runSimulation({
         nodes: mainNodes,
         edges: mainEdges,
-        workload,
+        workload: {
+            ...workload,
+            failures: [...(workload.failures || []), ...chaosFailures]
+        },
       });
 
       setResults(output);

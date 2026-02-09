@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { Toaster } from "react-hot-toast";
 import { Route, Routes, useLocation } from "react-router-dom";
 import { LoginForm } from "./components/auth/LoginForm";
-import { PasswordResetRequest } from "./components/auth/PasswordReset";
+import { PasswordResetRequest, PasswordResetConfirm } from "./components/auth/PasswordReset";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { RegisterForm } from "./components/auth/RegisterForm";
 import { Header } from "./components/layout/Header";
@@ -17,6 +17,15 @@ import { Subscription } from "./pages/Subscription";
 import { SubscriptionCancel } from "./pages/SubscriptionCancel";
 import { SubscriptionSuccess } from "./pages/SubscriptionSuccess";
 import { useAuthStore } from "./store/authStore";
+
+// Wrapper component to extract token from URL
+const PasswordResetPage = () => {
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const token = searchParams.get('token') || '';
+  
+  return <PasswordResetConfirm token={token} />;
+};
 function App() {
   const { fetchProfile, isAuthenticated, isLoading } = useAuthStore();
   const location = useLocation();
@@ -66,6 +75,7 @@ function App() {
           <Route path="/login" element={<LoginForm />} />
           <Route path="/signup" element={<RegisterForm />} />
           <Route path="/forgot-password" element={<PasswordResetRequest />} />
+          <Route path="/reset-password" element={<PasswordResetPage />} />
           <Route path="/canvas" element={<Builder />} />
           <Route path="/canvas/room/:roomId" element={<Builder />} />
           <Route path="/scenarios" element={<Scenarios />} />

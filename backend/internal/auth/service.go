@@ -328,6 +328,11 @@ func (s *Service) UpdateSubscriptionTier(userID string, newTier string) (*models
 	return s.GetUserProfile(userID)
 }
 
+// GetUserByEmail retrieves a user by email address
+func (s *Service) GetUserByEmail(email string) (*models.User, error) {
+	return s.repo.GetUserByEmail(email)
+}
+
 // Helper functions
 
 func (s *Service) loginExistingUser(user *models.User) (*AuthResponse, error) {

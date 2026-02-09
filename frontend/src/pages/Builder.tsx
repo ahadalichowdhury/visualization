@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import ReactFlow, {
-    addEdge,
-    Background,
-    BackgroundVariant,
-    Connection,
-    Edge,
-    MarkerType,
-    MiniMap,
-    NodeTypes,
-    Node as ReactFlowNode,
-    SelectionMode,
-    useEdgesState,
-    useNodesState,
+  addEdge,
+  Background,
+  BackgroundVariant,
+  Connection,
+  Edge,
+  MarkerType,
+  MiniMap,
+  NodeTypes,
+  Node as ReactFlowNode,
+  SelectionMode,
+  useEdgesState,
+  useNodesState,
 } from "reactflow";
 import "reactflow/dist/style.css";
 
@@ -42,9 +42,9 @@ import { architectureService } from "../services/architecture.service";
 import { scenarioService } from "../services/scenario.service";
 import { useAuthStore } from "../store/authStore";
 import type {
-    NodeConfig,
-    NodeData,
-    NodeTypeDefinition,
+  NodeConfig,
+  NodeData,
+  NodeTypeDefinition,
 } from "../types/builder.types";
 import { isValidConnection } from "../types/builder.types";
 import type { Scenario } from "../types/scenario.types";
@@ -739,6 +739,7 @@ export const Builder = () => {
               ...node.data,
               chaosFailure: config.failureType,
               chaosSeverity: config.severity,
+              chaosDuration: config.duration, // Store duration for simulation engine
             },
           };
         }
@@ -1655,22 +1656,30 @@ export const Builder = () => {
     setNodeContextMenu(null);
   }, []);
 
-  // Simulation playback logic
+  // Auto-play simulation playback when results are available
   useEffect(() => {
-    if (!simulationResults || !isSimulationPlaying) return;
-
-    const maxTick = simulationResults.timeSeries.length - 1;
-    if (currentTick >= maxTick) {
-      setIsSimulationPlaying(false);
-      return;
+    if (simulationResults) {
+      setCurrentTick(0);
+      setIsSimulationPlaying(true);
     }
+  }, [simulationResults]);
 
-    const timer = setTimeout(() => {
-      setCurrentTick((prev) => Math.min(prev + 1, maxTick));
-    }, 1000); // 1 second per tick
-
-    return () => clearTimeout(timer);
-  }, [simulationResults, isSimulationPlaying, currentTick]);
+  // Simulation Playback Timer
+  useEffect(() => {
+    let timer: any; // Fix lint error
+    if (isSimulationPlaying && simulationResults) {
+      timer = setInterval(() => {
+        setCurrentTick((prev) => {
+          if (prev >= simulationResults.timeSeries.length - 1) {
+            setIsSimulationPlaying(false);
+            return prev;
+          }
+          return prev + 1;
+        });
+      }, 500); // 500ms per tick
+    }
+    return () => clearInterval(timer);
+  }, [isSimulationPlaying, simulationResults]);
 
   // IMMEDIATE auto-scaling visualization when simulation completes
   useEffect(() => {
@@ -2042,6 +2051,32 @@ export const Builder = () => {
     }
   }, [isSimulationPlaying, simulationResults, setNodes, setEdges]);
 
+  // Clear simulation results and effects
+  const handleClearSimulation = () => {
+    setIsSimulationPlaying(false);
+    setCurrentTick(0);
+    setSimulationResults(null);
+    setShowLatencyHeatmap(false);
+    
+    // Clear chaos effects from nodes
+    setNodes((nds) => 
+      nds.map(node => {
+        if (node.data.chaosFailure) {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              chaosFailure: undefined,
+              chaosSeverity: undefined,
+              chaosDuration: undefined
+            }
+          };
+        }
+        return node;
+      })
+    );
+  };
+
   return (
     <div className="h-screen flex flex-col bg-white dark:bg-[#1e1e1e]">
       <BuilderHeader
@@ -2127,7 +2162,7 @@ export const Builder = () => {
               navigate(`/canvas/room/${newRoomId}`, { 
                 state: { 
                   nodes, 
-                  edges,
+                  edges, 
                   isHost: true 
                 } 
               });
@@ -2249,6 +2284,13 @@ export const Builder = () => {
             <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
             <MiniMap nodeColor={() => "#3b82f6"} nodeStrokeWidth={3} />
 
+            {/* Visual Feedback Overlays */}
+            {isSimulationPlaying && simulationResults && (
+                <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded-full text-sm font-bold backdrop-blur-sm shadow-xl z-30 animate-pulse border border-white/20">
+                     🔴 Simulation Playback: Tick {currentTick + 1} / {simulationResults.timeSeries.length}
+                </div>
+            )}
+            
             {/* Info Panel */}
           </ReactFlow>
         </div>
@@ -2344,7 +2386,15 @@ export const Builder = () => {
           nodes={nodes}
           edges={edges}
           isOpen={isSimulationPanelOpen}
-          onToggle={() => setIsSimulationPanelOpen(!isSimulationPanelOpen)}
+          onToggle={() => {
+              if (isSimulationPanelOpen) {
+                  // When closing, also clear simulation results and visual effects
+                  handleClearSimulation();
+                  setIsSimulationPanelOpen(false);
+              } else {
+                  setIsSimulationPanelOpen(true);
+              }
+          }}
           onSimulationComplete={handleSimulationComplete}
           scenario={scenario}
           onShowLatencyHeatmap={() => setShowLatencyHeatmap(true)}
@@ -2354,21 +2404,7 @@ export const Builder = () => {
             onPlay: () => setIsSimulationPlaying(true),
             onPause: () => setIsSimulationPlaying(false),
             onSeek: (tick) => setCurrentTick(tick),
-            onReset: () => {
-              setCurrentTick(0);
-              setIsSimulationPlaying(false);
-              setSimulationResults(null);
-
-              // Clean up auto-scaled replica nodes
-              setNodes((nds: ReactFlowNode[]) =>
-                nds.filter((n: ReactFlowNode) => !n.data?.isAutoScaled),
-              );
-
-              // Clean up auto-scaled edges
-              setEdges((eds: Edge[]) =>
-                eds.filter((e: Edge) => !e.id.includes("-autoscale-")),
-              );
-            },
+            onReset: handleClearSimulation,
           }}
         />
         {/* Chaos Engineering Panel - Modal only (button in footer) */}
