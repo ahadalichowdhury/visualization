@@ -63,6 +63,10 @@ export const Header: React.FC = () => {
               Scenarios
             </Link>
 
+            <Link to="/gallery" className={getLinkClasses("/gallery")}>
+              Gallery
+            </Link>
+
             {isAuthenticated && user ? (
               <>
 

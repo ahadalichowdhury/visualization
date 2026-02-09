@@ -1,15 +1,22 @@
 package handlers
 
 import (
+	"time"
+
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
+	"github.com/yourusername/visualization-backend/internal/analytics"
 	"github.com/yourusername/visualization-backend/internal/simulation"
 )
 
 type SimulationHandler struct {
+	analyticsService *analytics.Service
 }
 
-func NewSimulationHandler() *SimulationHandler {
-	return &SimulationHandler{}
+func NewSimulationHandler(analyticsService *analytics.Service) *SimulationHandler {
+	return &SimulationHandler{
+		analyticsService: analyticsService,
+	}
 }
 
 // RunSimulation handles POST /api/simulation/run
@@ -50,6 +57,7 @@ func (h *SimulationHandler) RunSimulation(c *fiber.Ctx) error {
 	}
 
 	// Create and run simulation engine
+	startTime := time.Now()
 	engine := simulation.NewEngine(&input)
 	output, err := engine.Run()
 
@@ -57,6 +65,22 @@ func (h *SimulationHandler) RunSimulation(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})
+	}
+
+	// Auto-save simulation run to analytics (if user is authenticated and architecture_id is provided)
+	if h.analyticsService != nil {
+		userID := c.Locals("userID")
+		architectureIDStr := c.Query("architecture_id") // Optional query param
+		
+		if userID != nil && architectureIDStr != "" {
+			if archID, err := uuid.Parse(architectureIDStr); err == nil {
+				durationMs := int(time.Since(startTime).Milliseconds())
+				// Save in background (don't block response)
+				go func() {
+					_ = h.analyticsService.SaveSimulationRun(archID, userID.(uuid.UUID), input.Workload, output, durationMs)
+				}()
+			}
+		}
 	}
 
 	return c.JSON(output)

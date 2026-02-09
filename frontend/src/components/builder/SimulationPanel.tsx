@@ -158,12 +158,18 @@ export const SimulationPanel = ({
             // Map frontend chaos types to backend failure types
             switch (node.data.chaosFailure) {
                 case 'crash':
-                case 'partition':
-                case 'throttle': 
                     type = 'nodeFail';
                     break;
+                case 'partition':
+                    type = 'partition';
+                    break;
+                case 'throttle':
+                    type = 'throttle';
+                    // Pass severity (0-100) via delayMs field as workaround
+                    delayMs = node.data.chaosSeverity || 50; 
+                    break;
                 case 'latency':
-                    type = 'networkDelay'; // Maps to Region Delay in backend
+                    type = 'nodeLatency'; // Use new specific node latency type
                     delayMs = (node.data.chaosSeverity || 50) * 20; // Severity 50 -> 1000ms delay
                     break;
             }

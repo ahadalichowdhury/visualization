@@ -34,6 +34,8 @@ import { ScenarioInfoPanel } from "../components/builder/ScenarioInfoPanel";
 import { ShareDialog } from "../components/builder/ShareDialog";
 import { SimulationPanel } from "../components/builder/SimulationPanel";
 import { TemplateModal } from "../components/builder/TemplateModal";
+import { PublishDialog } from "../components/gallery/PublishDialog";
+import { ExportDialog } from "../components/export/ExportDialog";
 import { MobileCanvasWarning } from "../components/common/MobileCanvasWarning";
 import type { ArchitectureTemplate } from "../data/templates";
 import { useCollaboration } from "../hooks/useCollaboration";
@@ -128,6 +130,9 @@ export const Builder = () => {
   const [isCollaborationEnabled, setIsCollaborationEnabled] = useState(false);
   const [collaborationRoomId, setCollaborationRoomId] = useState<string | null>(null);
   const [showShareDialog, setShowShareDialog] = useState(false);
+  const [showPublishDialog, setShowPublishDialog] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const nodeIdCounter = useRef(0);
   const edgeIdCounter = useRef(0);
   const isReceivingRemoteUpdate = useRef(false);
@@ -261,6 +266,18 @@ export const Builder = () => {
       }
     }
   }, [edges, isCollaborationEnabled, collaboration.isConnected, isAuthenticated, collaboration]);
+
+  // Handle ESC key to exit fullscreen
+  useEffect(() => {
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isFullscreen) {
+        setIsFullscreen(false);
+      }
+    };
+    
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [isFullscreen]);
 
   // ==================== VERSIONING HELPERS (Excalidraw-style) ====================
   const versionRef = useRef<Map<string, number>>(new Map()); // Track version for each element
@@ -2077,6 +2094,58 @@ export const Builder = () => {
     );
   };
 
+  // Clear canvas handler
+  const handleClearCanvas = () => {
+    // Only confirm if there are unsaved changes on unsaved architecture
+    if (
+      nodes.length > 0 &&
+      !autoSaveEnabled &&
+      !currentArchitectureId &&
+      hasUnsavedChanges &&
+      !confirm("Clear canvas and lose unsaved work?")
+    ) {
+      return;
+    }
+
+    if (autoSaveEnabled && nodes.length > 0) {
+      // Work is saved, just clear the canvas
+      saveToHistory();
+      setNodes([]);
+      setEdges([]);
+      setCurrentArchitectureId(null);
+      setSaveTitle("");
+      setSaveDescription("");
+      setAutoSaveEnabled(false);
+      setLastSavedAt(null);
+      setHasUnsavedChanges(false);
+      
+      // Disable collaboration when clearing
+      if (isCollaborationEnabled) {
+        setIsCollaborationEnabled(false);
+        setCollaborationRoomId(null);
+      }
+      if (roomId) {
+        navigate('/canvas');
+      }
+      
+      showInfo("Canvas cleared. Your previous work is saved!");
+    } else if (nodes.length > 0) {
+      // Clear without confirm (already checked above)
+      saveToHistory();
+      setNodes([]);
+      setEdges([]);
+      
+      // Disable collaboration when clearing
+      if (isCollaborationEnabled) {
+        setIsCollaborationEnabled(false);
+        setCollaborationRoomId(null);
+      }
+      if (roomId) {
+        navigate('/canvas');
+      }
+    }
+  };
+
   return (
     <div className="h-screen flex flex-col bg-white dark:bg-[#1e1e1e]">
       <BuilderHeader
@@ -2084,58 +2153,10 @@ export const Builder = () => {
         onSave={handleShowSaveDialog}
         onUndo={undo}
         onRedo={redo}
-        onClear={() => {
-          // Only confirm if there are unsaved changes on unsaved architecture
-          if (
-            nodes.length > 0 &&
-            !autoSaveEnabled &&
-            !currentArchitectureId &&
-            hasUnsavedChanges &&
-            !confirm("Clear canvas and lose unsaved work?")
-          ) {
-            return;
-          }
-
-          if (autoSaveEnabled && nodes.length > 0) {
-            // Work is saved, just clear the canvas
-            saveToHistory();
-            setNodes([]);
-            setEdges([]);
-            setCurrentArchitectureId(null);
-            setSaveTitle("");
-            setSaveDescription("");
-            setAutoSaveEnabled(false);
-            setLastSavedAt(null);
-            setHasUnsavedChanges(false);
-            
-            // Disable collaboration when clearing
-            if (isCollaborationEnabled) {
-              setIsCollaborationEnabled(false);
-              setCollaborationRoomId(null);
-            }
-            if (roomId) {
-              navigate('/canvas');
-            }
-            
-            showInfo("Canvas cleared. Your previous work is saved!");
-          } else if (nodes.length > 0) {
-            // Clear without confirm (already checked above)
-            saveToHistory();
-            setNodes([]);
-            setEdges([]);
-            
-            // Disable collaboration when clearing
-            if (isCollaborationEnabled) {
-              setIsCollaborationEnabled(false);
-              setCollaborationRoomId(null);
-            }
-            if (roomId) {
-              navigate('/canvas');
-            }
-          }
-        }}
-        onShowRequirements={() => setIsScenarioPanelOpen(true)}
+        onClear={handleClearCanvas}
+        onShowRequirements={!isFreeCanvas ? () => setIsScenarioPanelOpen(true) : undefined}
         onManageArchitectures={() => setShowArchitectureManager(true)}
+        onViewAnalytics={currentArchitectureId ? () => navigate(`/analytics/${currentArchitectureId}`) : undefined}
         canUndo={historyIndex > 0}
         canRedo={historyIndex < history.length - 1}
         isSaving={isSaving}
@@ -2204,7 +2225,7 @@ export const Builder = () => {
         isHost={!roomId || !!location.state?.isHost}
       />
 
-      <div className="flex-1 flex overflow-hidden relative">
+      <div className={isFullscreen ? "fixed inset-0 z-50 bg-white dark:bg-[#1e1e1e] flex overflow-hidden" : "flex-1 flex overflow-hidden relative"}>
         {/* Node Palette */}
         <div className="relative flex z-20">
           <div
@@ -2242,7 +2263,25 @@ export const Builder = () => {
           <CanvasToolbar
             mode={interactionMode}
             onChangeMode={setInteractionMode}
-          />{" "}
+          />
+
+          {/* Fullscreen Toggle */}
+          <button
+            onClick={() => setIsFullscreen(!isFullscreen)}
+            className="absolute top-4 right-4 bg-white dark:bg-[#252526] border border-gray-200 dark:border-[#3e3e3e] rounded-lg p-2 shadow-sm hover:bg-gray-100 dark:hover:bg-[#2d2d2d] z-50 text-gray-700 dark:text-[#d4d4d4] transition-colors"
+            title={isFullscreen ? "Exit Fullscreen (ESC)" : "Enter Fullscreen"}
+          >
+            {isFullscreen ? (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+              </svg>
+            )}
+          </button>
+
           {/* Remote Cursors */}
           {isCollaborationEnabled &&
             collaboration.users
@@ -2507,6 +2546,28 @@ export const Builder = () => {
             onClose={() => setShowShareDialog(false)}
           />
         )}
+
+        {/* Publish to Gallery Dialog */}
+        {showPublishDialog && currentArchitectureId && (
+          <PublishDialog
+            architectureId={currentArchitectureId}
+            currentTitle={saveTitle}
+            currentDescription={saveDescription}
+            isOpen={showPublishDialog}
+            onClose={() => setShowPublishDialog(false)}
+            onPublished={() => {
+              showSuccess('Architecture published to gallery!');
+            }}
+          />
+        )}
+
+        {/* Export IaC Dialog */}
+        <ExportDialog
+          nodes={nodes}
+          edges={edges}
+          isOpen={showExportDialog}
+          onClose={() => setShowExportDialog(false)}
+        />
       </div>
 
       <BuilderFooter
@@ -2514,8 +2575,22 @@ export const Builder = () => {
         onValidate={() => showInfo("Validation feature coming soon!")}
         onSimulate={() => setIsSimulationPanelOpen(true)}
         onChaos={() => setChaosExternalTrigger(true)}
+        onPublish={() => {
+          if (!isAuthenticated) {
+            showWarning('Please sign in to publish architectures');
+            setShowAuthModal(true);
+            return;
+          }
+          if (!currentArchitectureId) {
+            showWarning('Please save your architecture before publishing');
+            return;
+          }
+          setShowPublishDialog(true);
+        }}
+        onExport={() => setShowExportDialog(true)}
         nodeCount={nodes.length}
         edgeCount={edges.length}
+        canPublish={isAuthenticated && !!currentArchitectureId}
       />
 
       {/* Latency Heatmap Modal */}

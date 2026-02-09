@@ -140,9 +140,9 @@ type NodeMetrics struct {
 	Errors         int     `json:"errors"`
 	QueueDepth     int     `json:"queueDepth"`
 	CacheHitRate   float64 `json:"cacheHitRate"`
-	Status         string  `json:"status"`      // normal/warning/danger/failed
-	SuccessRate    float64 `json:"successRate"` // percentage of successful requests (0-100)
-	Replicas       int     `json:"replicas"`    // Current replica count (for auto-scaling visualization)
+	Status         string  `json:"status"`               // normal/warning/danger/failed
+	SuccessRate    float64 `json:"successRate"`          // percentage of successful requests (0-100)
+	Replicas       int     `json:"replicas"`             // Current replica count (for auto-scaling visualization)
 	Bottleneck     string  `json:"bottleneck,omitempty"` // "cpu", "memory", "disk", "network", "none"
 }
 
@@ -185,32 +185,34 @@ type AutoscalingEvent struct {
 
 // NodeState tracks runtime state of a node (enhanced for Module 5)
 type NodeState struct {
-	ID            string
-	Type          string
-	InstanceType  string // e.g., "c5.2xlarge", "db.m5.large"
-	StorageType   string // e.g., "gp3", "io2" (NEW - for disk performance)
-	LBType        string // e.g., "alb", "nlb"
-	AccessType    string // e.g., "internal", "external" (NEW)
-	CapacityRPS   float64
-	BaseLatencyMS float64 // ORIGINAL latency from hardware (never changes)
-	LatencyMS     float64 // CURRENT latency (includes queueing, calculated each tick)
-	Replicas      int
-	StorageSizeGB float64
-	TTL           int
-	Consistency   string
-	Region        string
-	CurrentLoad   float64
-	RPSIn         float64
-	RPSOut        float64
-	QueueDepth    int
-	MaxQueueDepth int
-	CacheHitRate  float64
-	CPUUsage      float64
-	MemoryUsage   float64
-	DiskIOUsage   float64 // NEW - for disk I/O tracking
-	ErrorCount    int
-	Failed        bool
-	ReadRatio     int // Percentage of operations that are reads (0-100)
+	ID              string
+	Type            string
+	InstanceType    string // e.g., "c5.2xlarge", "db.m5.large"
+	StorageType     string // e.g., "gp3", "io2" (NEW - for disk performance)
+	LBType          string // e.g., "alb", "nlb"
+	AccessType      string // e.g., "internal", "external" (NEW)
+	CapacityRPS     float64
+	BaseCapacityRPS float64 // ORIGINAL capacity (for restoring after throttle)
+	BaseLatencyMS   float64 // ORIGINAL latency from hardware (never changes)
+	LatencyMS       float64 // CURRENT latency (includes queueing, calculated each tick)
+	Replicas        int
+	StorageSizeGB   float64
+	TTL             int
+	Consistency     string
+	Region          string
+	CurrentLoad     float64
+	RPSIn           float64
+	RPSOut          float64
+	QueueDepth      int
+	MaxQueueDepth   int
+	CacheHitRate    float64
+	CPUUsage        float64
+	MemoryUsage     float64
+	DiskIOUsage     float64 // NEW - for disk I/O tracking
+	ErrorCount      int
+	Failed          bool
+	Partitioned     bool // NEW - Network partition (drops all outgoing traffic)
+	ReadRatio       int  // Percentage of operations that are reads (0-100)
 }
 
 // SimulationState tracks the entire simulation state (enhanced for Module 5)

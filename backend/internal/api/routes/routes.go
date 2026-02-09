@@ -3,6 +3,7 @@ package routes
 import (
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
+	"github.com/yourusername/visualization-backend/internal/analytics"
 	"github.com/yourusername/visualization-backend/internal/api/handlers"
 	"github.com/yourusername/visualization-backend/internal/api/middleware"
 	"github.com/yourusername/visualization-backend/internal/auth"
@@ -10,6 +11,7 @@ import (
 	"github.com/yourusername/visualization-backend/internal/config"
 	"github.com/yourusername/visualization-backend/internal/database"
 	"github.com/yourusername/visualization-backend/internal/email"
+	"github.com/yourusername/visualization-backend/internal/gallery"
 	stripeService "github.com/yourusername/visualization-backend/internal/stripe"
 	ws "github.com/yourusername/visualization-backend/internal/websocket"
 )
@@ -28,7 +30,11 @@ func Setup(app *fiber.App, repo *database.Repository, jwtService *auth.JWTServic
 	adminHandler := handlers.NewAdminHandler(repo)
 	scenarioHandler := handlers.NewScenarioHandler(repo)
 	architectureHandler := handlers.NewArchitectureHandler(repo)
-	simulationHandler := handlers.NewSimulationHandler()
+	
+	// Initialize analytics service (used by simulation handler)
+	analyticsService := analytics.NewService(repo.DB())
+	simulationHandler := handlers.NewSimulationHandler(analyticsService)
+	
 	collaborationHandler := handlers.NewCollaborationHandler(hub, repo)
 	exportHandler := handlers.NewExportHandler()
 	subscriptionHandler := handlers.NewSubscriptionHandler(repo)
@@ -37,6 +43,13 @@ func Setup(app *fiber.App, repo *database.Repository, jwtService *auth.JWTServic
 	// Initialize catalog handler
 	catalogRepo := catalog.NewRepository(repo.DB())
 	catalogHandler := catalog.NewHandler(catalogRepo)
+
+	// Initialize gallery service and handler
+	galleryService := gallery.NewService(repo.DB())
+	galleryHandler := handlers.NewGalleryHandler(galleryService)
+
+	// Initialize analytics handler (already created analyticsService above)
+	analyticsHandler := handlers.NewAnalyticsHandler(analyticsService)
 
 	// API group
 	api := app.Group("/api")
@@ -146,4 +159,29 @@ func Setup(app *fiber.App, repo *database.Repository, jwtService *auth.JWTServic
 
 	// Component Catalog routes (public)
 	catalogHandler.RegisterRoutes(api)
+
+	// Gallery routes (NEW - Public Architecture Gallery)
+	// Public routes (no auth required for browsing)
+	galleryGroup := api.Group("/gallery")
+	galleryGroup.Get("/", galleryHandler.BrowseGallery)
+	galleryGroup.Get("/:id", galleryHandler.GetPublicArchitecture)
+	galleryGroup.Get("/:id/comments", galleryHandler.GetComments)
+	
+	// Protected gallery routes (require authentication)
+	galleryProtected := api.Group("/gallery", middleware.AuthMiddleware(jwtService))
+	galleryProtected.Post("/publish", galleryHandler.PublishArchitecture)
+	galleryProtected.Post("/:id/clone", galleryHandler.CloneArchitecture)
+	galleryProtected.Post("/:id/like", galleryHandler.LikeArchitecture)
+	galleryProtected.Post("/:id/comments", galleryHandler.AddComment)
+	galleryProtected.Delete("/:id", galleryHandler.UnpublishArchitecture)
+
+	// Analytics routes (NEW - Advanced Analytics & Historical Tracking)
+	analyticsGroup := api.Group("/analytics", middleware.AuthMiddleware(jwtService))
+	analyticsGroup.Get("/:architectureId/simulations", analyticsHandler.GetSimulationHistory)
+	analyticsGroup.Get("/:architectureId/trends", analyticsHandler.GetPerformanceTrends)
+	analyticsGroup.Get("/:architectureId/costs", analyticsHandler.GetCostTrends)
+	analyticsGroup.Get("/:architectureId/snapshots", analyticsHandler.GetSnapshots)
+	analyticsGroup.Get("/:architectureId/summary", analyticsHandler.GetSummary)
+	analyticsGroup.Get("/:architectureId/insights", analyticsHandler.GetInsights)
+	analyticsGroup.Post("/:architectureId/snapshots", analyticsHandler.CreateSnapshot)
 }

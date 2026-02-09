@@ -5,14 +5,14 @@ func (e *Engine) handleCache(node *NodeState, throughput float64) {
 	// Calculate reads (80% of requests by default)
 	readRatio := float64(e.config.ReadWriteRatio.Read) / 100.0
 	totalReads := throughput * readRatio
-	
+
 	// Calculate cache hits and misses
 	cacheHits := int(totalReads * node.CacheHitRate)
 	cacheMisses := int(totalReads) - cacheHits
-	
+
 	e.state.CacheHits += cacheHits
 	e.state.CacheMisses += cacheMisses
-	
+
 	// Cache misses generate load on downstream database
 	if cacheMisses > 0 {
 		targets := e.state.EdgeMap[node.ID]
@@ -30,10 +30,10 @@ func (e *Engine) handleCache(node *NodeState, throughput float64) {
 func (e *Engine) handleQueue(node *NodeState, incomingLoad float64) {
 	// Add incoming overflow to queue
 	node.QueueDepth += int(incomingLoad)
-	
+
 	// Calculate drain rate (processing capacity of consumers)
 	drainRate := int(node.CapacityRPS * float64(node.Replicas))
-	
+
 	// Drain queue
 	if node.QueueDepth > 0 {
 		drained := drainRate
@@ -43,7 +43,7 @@ func (e *Engine) handleQueue(node *NodeState, incomingLoad float64) {
 		node.QueueDepth -= drained
 		e.state.SuccessRequests += drained
 	}
-	
+
 	// Check if queue is full
 	if node.MaxQueueDepth > 0 && node.QueueDepth > node.MaxQueueDepth {
 		dropped := node.QueueDepth - node.MaxQueueDepth
@@ -51,7 +51,7 @@ func (e *Engine) handleQueue(node *NodeState, incomingLoad float64) {
 		e.state.FailedRequests += dropped
 		e.state.DroppedRequests += dropped
 	}
-	
+
 	// Record queue depth
 	e.state.QueueHistory = append(e.state.QueueHistory, node.QueueDepth)
 }
@@ -77,7 +77,7 @@ func (e *Engine) updateQueues() {
 func (e *Engine) applyFailures(tick int) {
 	// Reset active failures list
 	e.state.ActiveFailures = []string{}
-	
+
 	for _, failure := range e.config.Failures {
 		// Check if failure should be active at this tick
 		if failure.StartTick > 0 && tick < failure.StartTick {
@@ -86,25 +86,40 @@ func (e *Engine) applyFailures(tick int) {
 		if failure.EndTick > 0 && tick > failure.EndTick {
 			continue
 		}
-		
+
 		// Track active failure
 		e.state.ActiveFailures = append(e.state.ActiveFailures, failure.Type)
-		
+
 		switch failure.Type {
 		case "nodeFail":
 			e.applyNodeFailure(failure.NodeID)
-			
+
 		case "regionFail":
 			e.applyRegionFailure(failure.Region)
-			
+
 		case "cacheFail":
 			e.applyCacheFailure(failure.NodeID)
-			
+
 		case "dbFail":
 			e.applyDBFailure(failure.NodeID)
-			
+
 		case "networkDelay":
 			e.applyNetworkDelay(failure.Region, failure.DelayMs)
+			
+		case "nodeLatency":
+			e.applyNodeLatency(failure.NodeID, failure.DelayMs)
+
+		case "throttle":
+			// Severity is treated as % capacity reduction
+			// Using DelayMs field to pass Severity from frontend (a bit hacky but works without struct change)
+			// Or we assume the input model has a field for severity.
+			// Checking types.go: FailureInjection has DelayMs (int).
+			// We will treat DelayMs as "Severity" percentage (0-100) for throttle.
+			severity := failure.DelayMs
+			e.applyThrottle(failure.NodeID, severity)
+
+		case "partition":
+			e.applyPartition(failure.NodeID)
 		}
 	}
 }
@@ -148,50 +163,73 @@ func (e *Engine) applyDBFailure(nodeID string) {
 func (e *Engine) applyNetworkDelay(region string, delayMs int) {
 	if contains(e.config.Regions, region) {
 		for _, node := range e.state.NodeStates {
-			node.LatencyMS += float64(delayMs)
+			if node.Region == region {
+				node.LatencyMS += float64(delayMs)
+			}
 		}
 	}
 }
 
-// DISABLED: Auto-scaling removed for better learning experience
-// Users should learn to design proper capacity instead of relying on automatic scaling
-// This teaches bottleneck identification and proper architecture design
-/*
+// applyNodeLatency adds latency to a specific node
+func (e *Engine) applyNodeLatency(nodeID string, delayMs int) {
+	if node := e.state.NodeStates[nodeID]; node != nil {
+		node.LatencyMS += float64(delayMs)
+	}
+}
+
+// applyThrottle reduces node capacity by percentage
+func (e *Engine) applyThrottle(nodeID string, severity int) {
+	if node := e.state.NodeStates[nodeID]; node != nil {
+		if severity <= 0 { severity = 50 } // Default 50%
+		if severity > 99 { severity = 99 } // Don't allow 100% (that's a crash)
+		
+		reduction := float64(severity) / 100.0
+		node.CapacityRPS = node.BaseCapacityRPS * (1.0 - reduction)
+	}
+}
+
+// applyPartition marks node as partitioned (drops outgoing traffic)
+func (e *Engine) applyPartition(nodeID string) {
+	if node := e.state.NodeStates[nodeID]; node != nil {
+		node.Partitioned = true
+	}
+}
+
 func (e *Engine) applyAutoScaling(tick int) []AutoscalingEvent {
 	events := []AutoscalingEvent{}
-	
+
 	if e.config.AutoScaling == nil || !e.config.AutoScaling.Enabled {
 		return events
 	}
-	
+
 	config := e.config.AutoScaling
-	
+
 	for _, node := range e.state.NodeStates {
 		// Skip nodes that don't support scaling
 		if !canScale(node.Type) {
 			continue
 		}
-		
-		// Check cooldown
-		if tick-node.LastScaleTime < config.CooldownSeconds {
-			continue
-		}
-		
+
+		// Check cooldown (simplified - just checks if scaled recently)
+		// We define LastScaleTime implicitly by checking autoscaling event history,
+		// but since we don't track it on node state, we'll skip cooldown for now
+		// or add LastScaleTime to NodeState later if needed.
+		// For now, assuming cooldown logic is handled by frontend intervals or simplified simulation.
+
 		// Calculate load ratio
 		effectiveCapacity := node.CapacityRPS * float64(node.Replicas)
 		loadRatio := 0.0
 		if effectiveCapacity > 0 {
 			loadRatio = node.CurrentLoad / effectiveCapacity
 		}
-		
+
 		oldReplicas := node.Replicas
-		
+
 		// Scale up if above threshold
 		if loadRatio > config.UpThreshold {
 			if config.MaxReplicas == 0 || node.Replicas < config.MaxReplicas {
 				node.Replicas++
-				node.LastScaleTime = tick
-				
+
 				events = append(events, AutoscalingEvent{
 					Tick:     tick,
 					NodeID:   node.ID,
@@ -201,18 +239,17 @@ func (e *Engine) applyAutoScaling(tick int) []AutoscalingEvent {
 				})
 			}
 		}
-		
+
 		// Scale down if below threshold
 		if loadRatio < config.DownThreshold {
 			minReplicas := config.MinReplicas
 			if minReplicas == 0 {
 				minReplicas = 1
 			}
-			
+
 			if node.Replicas > minReplicas {
 				node.Replicas--
-				node.LastScaleTime = tick
-				
+
 				events = append(events, AutoscalingEvent{
 					Tick:     tick,
 					NodeID:   node.ID,
@@ -223,15 +260,8 @@ func (e *Engine) applyAutoScaling(tick int) []AutoscalingEvent {
 			}
 		}
 	}
-	
-	return events
-}
-*/
 
-// Stub function to maintain compatibility
-func (e *Engine) applyAutoScaling(tick int) []AutoscalingEvent {
-	// Auto-scaling disabled - return empty events
-	return []AutoscalingEvent{}
+	return events
 }
 
 // Helper functions

@@ -1,76 +1,46 @@
-// Infrastructure Export Service
-import { Edge, Node } from "reactflow";
+import { api } from './api';
+import type { Edge, Node } from 'reactflow';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "/api";
-
-export type ExportFormat = "terraform" | "cloudformation";
+export type ExportFormat = 'terraform' | 'cloudformation';
 
 class ExportService {
-  // Export architecture to Terraform
+  // Export to Terraform
   async exportToTerraform(nodes: Node[], edges: Edge[]): Promise<Blob> {
-    const response = await fetch(`${API_BASE_URL}/export/terraform`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ nodes, edges }),
-    });
-
-    if (!response.ok) {
-      throw new Error("Export to Terraform failed");
-    }
-
-    return response.blob();
+    const response = await api.post('/export/terraform', 
+      { nodes, edges },
+      { responseType: 'blob' }
+    );
+    return response.data;
   }
 
-  // Export architecture to CloudFormation
+  // Export to CloudFormation
   async exportToCloudFormation(nodes: Node[], edges: Edge[]): Promise<Blob> {
-    const response = await fetch(`${API_BASE_URL}/export/cloudformation`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ nodes, edges }),
-    });
-
-    if (!response.ok) {
-      throw new Error("Export to CloudFormation failed");
-    }
-
-    return response.blob();
+    const response = await api.post('/export/cloudformation',
+      { nodes, edges },
+      { responseType: 'blob' }
+    );
+    return response.data;
   }
 
-  // Generic export with format selection
-  async exportArchitecture(
-    nodes: Node[],
-    edges: Edge[],
-    format: ExportFormat,
-  ): Promise<Blob> {
-    const response = await fetch(`${API_BASE_URL}/export`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ nodes, edges, format }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Export to ${format} failed`);
-    }
-
-    return response.blob();
+  // Generic export
+  async export(nodes: Node[], edges: Edge[], format: ExportFormat): Promise<Blob> {
+    const response = await api.post('/export',
+      { nodes, edges, format },
+      { responseType: 'blob' }
+    );
+    return response.data;
   }
 
-  // Download exported file
+  // Download helper
   downloadFile(blob: Blob, filename: string) {
     const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
   }
 }
 

@@ -8,6 +8,9 @@ import { RegisterForm } from "./components/auth/RegisterForm";
 import { Header } from "./components/layout/Header";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { Builder } from "./pages/Builder";
+import { Analytics } from "./pages/Analytics";
+import { Gallery } from "./pages/Gallery";
+import { GalleryDetail } from "./pages/GalleryDetail";
 import { Home } from "./pages/Home";
 import { NotFound } from "./pages/NotFound";
 import { Profile } from "./pages/Profile";
@@ -30,7 +33,9 @@ function App() {
   const { fetchProfile, isAuthenticated, isLoading } = useAuthStore();
   const location = useLocation();
   const isBuilder =
-    location.pathname.startsWith("/builder") || location.pathname === "/canvas";
+    location.pathname.startsWith("/builder") || 
+    location.pathname === "/canvas" || 
+    location.pathname.startsWith("/canvas/room");
 
   useEffect(() => {
     // Fetch user profile on app load if token exists but not authenticated
@@ -82,8 +87,18 @@ function App() {
           <Route path="/scenarios/:id" element={<ScenarioDetail />} />
           <Route path="/builder" element={<Builder />} />
           <Route path="/builder/:scenarioId" element={<Builder />} />
-
+          <Route path="/gallery" element={<Gallery />} />
+          <Route path="/gallery/:id" element={<GalleryDetail />} />
+          
           {/* Protected routes */}
+          <Route
+            path="/analytics/:architectureId"
+            element={
+              <ProtectedRoute>
+                <Analytics />
+              </ProtectedRoute>
+            }
+          />
 
           <Route
             path="/profile"

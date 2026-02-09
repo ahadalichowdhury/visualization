@@ -3,8 +3,11 @@ interface BuilderFooterProps {
   onValidate: () => void;
   onSimulate: () => void;
   onChaos: () => void;
+  onPublish?: () => void;
+  onExport?: () => void;
   nodeCount: number;
   edgeCount: number;
+  canPublish?: boolean;
 }
 
 export const BuilderFooter = ({
@@ -12,8 +15,11 @@ export const BuilderFooter = ({
   onValidate,
   onSimulate,
   onChaos,
+  onPublish,
+  onExport,
   nodeCount,
   edgeCount,
+  canPublish = false,
 }: BuilderFooterProps) => {
   return (
     <footer className="bg-white dark:bg-[#252526] border-t border-gray-200 dark:border-[#3e3e3e] px-6 py-4 shadow-lg">
@@ -71,6 +77,36 @@ export const BuilderFooter = ({
             </svg>
             <span>Chaos</span>
           </button>
+
+          {/* Publish to Gallery Button */}
+          {onPublish && (
+            <button
+              onClick={onPublish}
+              disabled={!canPublish}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium text-sm flex items-center space-x-2 shadow-md hover:shadow-lg"
+              title="Publish to Gallery"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+              <span>Publish</span>
+            </button>
+          )}
+
+          {/* Export IaC Button */}
+          {onExport && (
+            <button
+              onClick={onExport}
+              disabled={nodeCount === 0}
+              className="px-6 py-3 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium text-sm flex items-center space-x-2 shadow-md hover:shadow-lg"
+              title="Export to IaC"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              <span>Export</span>
+            </button>
+          )}
 
           {/* Simulate Button */}
           <button

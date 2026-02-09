@@ -48,6 +48,8 @@ func (e *Engine) Run() (*SimulationOutput, error) {
 		// Reset transient state for all nodes (failures are re-applied each tick)
 		for _, node := range e.state.NodeStates {
 			node.Failed = false
+			node.Partitioned = false
+			node.CapacityRPS = node.BaseCapacityRPS // Restore capacity
 			// Restore base latency (remove previous network delays)
 			// processNodeWithTraffic will add current delays back
 			// We don't need to manually reset LatencyMS here because processNodeWithTraffic
@@ -138,6 +140,7 @@ func (e *Engine) InitializeState() error {
 			LBType:        getString(node.Data.Config, "lbType", ""),
 			AccessType:    getString(node.Data.Config, "accessType", "external"), // Default to external for LBs
 			CapacityRPS:   capacityRPS,
+			BaseCapacityRPS: capacityRPS, // Store original capacity
 			BaseLatencyMS: latencyMS, // ORIGINAL latency (never changes)
 			LatencyMS:     latencyMS, // CURRENT latency (will be updated each tick)
 			Replicas:      getInt(node.Data.Config, "replicas", 1),
@@ -298,6 +301,11 @@ func (e *Engine) routeRequests(rps float64) {
 // calculateNodeOutgoing calculates how much RPS a node sends downstream
 func (e *Engine) calculateNodeOutgoing(node *NodeState, incomingRPS float64) float64 {
 	if node.Failed {
+		return 0
+	}
+	
+	if node.Partitioned {
+		// Network partition: drops all outgoing traffic (blackhole)
 		return 0
 	}
 
